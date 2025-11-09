@@ -1,0 +1,9 @@
+fastapi>=0.104.1
+uvicorn[standard]>=0.24.0
+trimesh>=4.0.5
+numpy>=1.26.0
+shapely>=2.0.2
+pyproj>=3.6.1
+requests>=2.31.0
+pillow>=10.2.0
+python-multipart>=0.0.6
