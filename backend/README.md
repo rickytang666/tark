@@ -26,6 +26,10 @@ cp .env.example .env
 # Edit .env and add your Mapbox access token
 ```
 
+Get your free Mapbox token from: https://account.mapbox.com/access-tokens/
+
+The free tier includes 50,000 requests/month for Terrain-RGB tiles.
+
 4. **Run development server:**
 
 ```bash
@@ -35,6 +39,35 @@ uvicorn app.main:app --reload
 ```
 
 The API will be available at `http://localhost:8000`
+
+## Testing
+
+### Test Mapbox Terrain Fetcher
+
+```bash
+# Make sure .env is configured with your MAPBOX_ACCESS_TOKEN
+python tests/test_mapbox.py
+```
+
+This will fetch elevation data for a small area near San Francisco and verify the fetcher works correctly.
+
+Expected output:
+
+```
+🗺️  Testing Mapbox Terrain-RGB Fetcher
+
+📍 Fetching elevation data for: ...
+⏳ Fetching tiles from Mapbox...
+✅ Successfully fetched elevation data!
+
+📊 Results:
+   Array shape: (256, 512)
+   Tiles fetched: 2
+   Min elevation: -1.50 meters
+   Max elevation: 282.20 meters
+   ...
+✅ All tests passed!
+```
 
 ## API Documentation
 
@@ -58,6 +91,9 @@ backend/
 │   └── utils/
 │       ├── coords.py         # Coordinate transformations
 │       └── mesh.py           # Mesh utilities
+├── tests/
+│   ├── test_mapbox.py        # Test Mapbox terrain fetcher
+│   └── test_overpass.py      # Test Overpass building fetcher (coming soon)
 ├── requirements.txt
 └── temp/                     # Temporary file storage
 ```
@@ -69,10 +105,14 @@ backend/
 - FastAPI project structure
 - Basic API endpoints
 - Module scaffolding
+- **Mapbox Terrain-RGB fetcher** (fully functional)
+  - Lat/lon to tile coordinate conversion
+  - Multi-tile fetching and stitching
+  - RGB to elevation decoding
+  - Metadata generation
 
 ### 🚧 In Progress
 
-- Mapbox Terrain-RGB fetcher
 - Overpass API building fetcher
 - Terrain mesh generation
 - Building extrusion
