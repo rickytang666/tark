@@ -36,29 +36,18 @@ Server runs at `http://localhost:8000`
 ### Test Mapbox Terrain Fetcher
 
 ```bash
-# Make sure .env is configured with your MAPBOX_ACCESS_TOKEN
 python tests/test_mapbox.py
 ```
 
-This will fetch elevation data for a small area near San Francisco and verify the fetcher works correctly.
+Fetches elevation data for SF area. Expected: ~131k elevation points, 2 tiles, -1.5m to 282m range.
 
-Expected output:
+### Test Overpass Building Fetcher
 
+```bash
+python tests/test_overpass.py
 ```
-🗺️  Testing Mapbox Terrain-RGB Fetcher
 
-📍 Fetching elevation data for: ...
-⏳ Fetching tiles from Mapbox...
-✅ Successfully fetched elevation data!
-
-📊 Results:
-   Array shape: (256, 512)
-   Tiles fetched: 2
-   Min elevation: -1.50 meters
-   Max elevation: 282.20 meters
-   ...
-✅ All tests passed!
-```
+Fetches building footprints from OSM. Expected: ~1000 buildings with height/type metadata.
 
 ## API Documentation
 
@@ -84,7 +73,7 @@ backend/
 │       └── mesh.py           # Mesh utilities
 ├── tests/
 │   ├── test_mapbox.py        # Test Mapbox terrain fetcher
-│   └── test_overpass.py      # Test Overpass building fetcher (coming soon)
+│   └── test_overpass.py      # Test Overpass building fetcher
 ├── requirements.txt
 └── temp/                     # Temporary file storage
 ```
@@ -96,15 +85,16 @@ backend/
 - FastAPI project structure
 - Basic API endpoints
 - Module scaffolding
-- **Mapbox Terrain-RGB fetcher** (fully functional)
-  - Lat/lon to tile coordinate conversion
-  - Multi-tile fetching and stitching
-  - RGB to elevation decoding
-  - Metadata generation
+- **Mapbox Terrain-RGB fetcher**
+  - Tile fetching, stitching, RGB→elevation decoding
+  - Tested: 131k elevation points for 0.74 km² area
+- **Overpass API building fetcher**
+  - OSM building queries, polygon parsing
+  - Height/level/type extraction
+  - Tested: 1081 buildings with 87% height coverage
 
 ### 🚧 In Progress
 
-- Overpass API building fetcher
 - Terrain mesh generation
 - Building extrusion
 
