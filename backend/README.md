@@ -131,9 +131,13 @@ backend/
   - Coordinate system alignment, mesh centering
   - Tested: 162k vertices, 322k faces, 25MB OBJ export
 
-### ⚠️ Known Issues
+### ⚠️ Known Issues & Standards
 
-- **Terrain bbox cropping**: Mapbox tiles cover larger areas than requested bbox. Small areas may include elevation from outside the bbox, causing vertical exaggeration. Use larger bboxes (>1km) for better results.
+**IMPORTANT:** See `STANDARDS.md` for detailed specifications.
+
+- **Bbox size requirements**: Minimum 1km × 1km, recommended 1.5-2km × 2km, maximum 5km × 5km
+- **Unit standard**: 1 OBJ unit = 1 real-world meter (no scaling)
+- **Terrain bbox cropping**: Mapbox tiles not cropped to exact bbox. Small areas (<1km) show vertical exaggeration.
 - **Overpass API timeouts**: OSM Overpass API can timeout under load. Retry with increased timeout or test without buildings.
 
 ### 🚧 Next Steps

@@ -35,6 +35,9 @@ class CoordinateTransformer:
             self.local_proj,
             always_xy=True
         )
+        
+        # Calculate center point in projected coordinates
+        self.center_x, self.center_y = self.transformer.transform(center_lon, center_lat)
     
     def _create_local_projection(self) -> pyproj.CRS:
         """
@@ -57,7 +60,7 @@ class CoordinateTransformer:
     
     def latlon_to_local(self, lat: float, lon: float) -> Tuple[float, float]:
         """
-        Convert lat/lon to local coordinates (meters)
+        Convert lat/lon to local coordinates (meters from center)
         
         Args:
             lat: Latitude
@@ -67,7 +70,8 @@ class CoordinateTransformer:
             (x, y) in meters from center
         """
         x, y = self.transformer.transform(lon, lat)
-        return x, y
+        # Subtract center to get relative coordinates
+        return x - self.center_x, y - self.center_y
     
     def latlon_array_to_local(
         self,
@@ -75,15 +79,16 @@ class CoordinateTransformer:
         lons: np.ndarray
     ) -> Tuple[np.ndarray, np.ndarray]:
         """
-        Convert arrays of lat/lon to local coordinates
+        Convert arrays of lat/lon to local coordinates (meters from center)
         
         Args:
             lats: Array of latitudes
             lons: Array of longitudes
         
         Returns:
-            (x_array, y_array) in meters
+            (x_array, y_array) in meters from center
         """
         xs, ys = self.transformer.transform(lons, lats)
-        return xs, ys
+        # Subtract center to get relative coordinates
+        return xs - self.center_x, ys - self.center_y
 

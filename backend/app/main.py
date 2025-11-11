@@ -7,6 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from typing import Optional
 import os
+import math
 from dotenv import load_dotenv
 
 # Load environment variables from .env file
@@ -46,15 +47,28 @@ class BoundingBox(BaseModel):
         if self.east <= self.west:
             raise ValueError("East must be greater than west")
         
-        # Calculate approximate area (rough estimate)
+        # Calculate approximate dimensions in meters
         lat_diff = self.north - self.south
         lng_diff = self.east - self.west
-        # Rough conversion: 1 degree ≈ 111 km
-        area_km2 = (lat_diff * 111) * (lng_diff * 111)
         
-        # Max area: 5km x 5km = 25 km²
-        if area_km2 > 25:
-            raise ValueError(f"Area too large: {area_km2:.2f} km². Maximum is 25 km² (5km x 5km)")
+        # At mid-latitude, convert degrees to meters
+        center_lat = (self.north + self.south) / 2
+        lat_meters = lat_diff * 111000  # 1 degree lat ≈ 111km
+        lng_meters = lng_diff * 111000 * abs(math.cos(math.radians(center_lat)))
+        
+        # Minimum: 1km × 1km (prevents Mapbox tile issues)
+        if lat_meters < 1000 or lng_meters < 1000:
+            raise ValueError(
+                f"Area too small: {lat_meters:.0f}m × {lng_meters:.0f}m. "
+                f"Minimum is 1km × 1km to ensure proper terrain representation."
+            )
+        
+        # Maximum: 5km × 5km (prevents timeout/memory issues)
+        if lat_meters > 5000 or lng_meters > 5000:
+            raise ValueError(
+                f"Area too large: {lat_meters:.0f}m × {lng_meters:.0f}m. "
+                f"Maximum is 5km × 5km."
+            )
         
         return True
 
