@@ -60,8 +60,10 @@ class TerrainGenerator:
         # 6. Create mesh
         mesh = trimesh.Trimesh(vertices=vertices, faces=faces)
         
-        # 7. Center at origin
-        mesh.vertices -= mesh.centroid
+        # 7. Center X and Y at origin (but keep Z elevation intact)
+        centroid_xy = mesh.centroid.copy()
+        centroid_xy[2] = 0  # Don't center Z - keep real elevations
+        mesh.vertices -= centroid_xy
         
         return mesh
     

@@ -65,6 +65,14 @@ python tests/test_buildings.py
 
 Extrudes building footprints to 3D boxes. Expected: 1081 buildings, 31k vertices, 62k faces. Exports to `temp/test_buildings.obj`.
 
+### Test Full Pipeline
+
+```bash
+python tests/test_pipeline.py
+```
+
+Complete pipeline: terrain + buildings merged. Expected: 162k vertices, 322k faces. Exports to `temp/scene.obj`.
+
 ## API Documentation
 
 Once running, visit:
@@ -91,7 +99,8 @@ backend/
 │   ├── test_mapbox.py        # Test Mapbox terrain fetcher
 │   ├── test_overpass.py      # Test Overpass building fetcher
 │   ├── test_terrain.py       # Test terrain mesh generation
-│   └── test_buildings.py     # Test building extrusion
+│   ├── test_buildings.py     # Test building extrusion
+│   └── test_pipeline.py      # Test full pipeline (terrain + buildings)
 ├── requirements.txt
 └── temp/                     # Temporary file storage
 ```
@@ -117,12 +126,21 @@ backend/
   - 2D footprints → 3D boxes with height estimation
   - Bottom/top/wall face generation, coordinate transformation
   - Tested: 1081 buildings, 100% success rate, 31k vertices
+- **Full pipeline integration** (Days 3-4 complete)
+  - End-to-end: bbox → terrain + buildings → merged OBJ
+  - Coordinate system alignment, mesh centering
+  - Tested: 162k vertices, 322k faces, 25MB OBJ export
 
-### 🚧 In Progress (Days 3-4)
+### ⚠️ Known Issues
 
-- Mesh merging (terrain + buildings)
-- OBJ/MTL export with materials
-- Full pipeline integration
+- **Terrain bbox cropping**: Mapbox tiles cover larger areas than requested bbox. Small areas may include elevation from outside the bbox, causing vertical exaggeration. Use larger bboxes (>1km) for better results.
+- **Overpass API timeouts**: OSM Overpass API can timeout under load. Retry with increased timeout or test without buildings.
+
+### 🚧 Next Steps
+
+- Frontend (Next.js + Leaflet map interface)
+- API integration with FastAPI backend
+- Material/texture support
 
 ### 📋 TODO
 
