@@ -14,15 +14,17 @@ class BuildingExtruder:
     Extrudes building footprints to 3D meshes
     """
     
-    def __init__(self, center_lat: float, center_lon: float):
+    def __init__(self, center_lat: float, center_lon: float, terrain_mesh: Optional[trimesh.Trimesh] = None):
         """
         Initialize building extruder
         
         Args:
             center_lat: Center latitude for coordinate transformation
             center_lon: Center longitude for coordinate transformation
+            terrain_mesh: Optional terrain mesh to sample elevation from
         """
         self.transformer = CoordinateTransformer(center_lat, center_lon)
+        self.terrain_mesh = terrain_mesh
     
     def extrude_buildings(
         self,
@@ -97,8 +99,17 @@ class BuildingExtruder:
         # Create 2D polygon
         footprint_2d = np.column_stack([xs, ys])
         
+        # Sample terrain elevation if available
+        base_elevation = 0.0
+        if self.terrain_mesh is not None:
+            base_elevation = self._sample_terrain_elevation(footprint_2d)
+        
         # Extrude to 3D
         mesh = self._extrude_polygon(footprint_2d, height)
+        
+        # Offset mesh to sit on terrain
+        if base_elevation != 0.0:
+            mesh.vertices[:, 2] += base_elevation
         
         return mesh
     
@@ -110,6 +121,11 @@ class BuildingExtruder:
         """
         Extrude a 2D polygon to create a 3D box mesh
         
+        Uses trimesh's built-in extrude_polygon which properly handles:
+        - Concave polygons (L-shapes, U-shapes, etc.)
+        - Complex shapes with proper triangulation
+        - Correct face winding and normals
+        
         Args:
             footprint_2d: 2D polygon vertices (N x 2)
             height: Extrusion height in meters
@@ -117,46 +133,57 @@ class BuildingExtruder:
         Returns:
             trimesh.Trimesh of extruded building
         """
-        n_points = len(footprint_2d)
+        # Create Shapely polygon for proper triangulation
+        polygon = Polygon(footprint_2d)
         
-        # Create bottom vertices (z=0) and top vertices (z=height)
-        bottom_verts = np.column_stack([footprint_2d, np.zeros(n_points)])
-        top_verts = np.column_stack([footprint_2d, np.full(n_points, height)])
+        # Validate polygon
+        if not polygon.is_valid or polygon.is_empty:
+            # Fallback: try to fix invalid polygons
+            polygon = polygon.buffer(0)
+            if not polygon.is_valid:
+                raise ValueError("Invalid polygon footprint")
         
-        # Combine all vertices
-        vertices = np.vstack([bottom_verts, top_verts])
-        
-        # Generate faces
-        faces = []
-        
-        # Bottom face (reversed winding for correct normal)
-        if n_points >= 3:
-            # Triangulate bottom face
-            for i in range(1, n_points - 1):
-                faces.append([0, i + 1, i])
-        
-        # Top face
-        if n_points >= 3:
-            # Triangulate top face
-            for i in range(1, n_points - 1):
-                faces.append([n_points, n_points + i, n_points + i + 1])
-        
-        # Side faces (walls)
-        for i in range(n_points):
-            next_i = (i + 1) % n_points
-            
-            # Two triangles per wall segment
-            # Triangle 1
-            faces.append([i, next_i, n_points + i])
-            # Triangle 2
-            faces.append([next_i, n_points + next_i, n_points + i])
-        
-        faces = np.array(faces)
-        
-        # Create mesh
-        mesh = trimesh.Trimesh(vertices=vertices, faces=faces)
+        # Use trimesh's built-in extrusion with proper triangulation
+        # This handles concave polygons correctly (L-shapes, U-shapes, etc.)
+        mesh = trimesh.creation.extrude_polygon(polygon, height=height)
         
         return mesh
+    
+    def _sample_terrain_elevation(self, footprint_2d: np.ndarray) -> float:
+        """
+        Sample the terrain elevation at a building's footprint
+        
+        Uses the center point of the footprint to query terrain mesh elevation.
+        
+        Args:
+            footprint_2d: 2D building footprint (N x 2)
+        
+        Returns:
+            Base elevation in meters (Z coordinate)
+        """
+        if self.terrain_mesh is None:
+            return 0.0
+        
+        # Calculate centroid of footprint
+        centroid_x = np.mean(footprint_2d[:, 0])
+        centroid_y = np.mean(footprint_2d[:, 1])
+        
+        # Find nearest terrain vertex to building centroid
+        # We use the terrain mesh vertices as elevation samples
+        terrain_xy = self.terrain_mesh.vertices[:, :2]  # Just X, Y
+        terrain_z = self.terrain_mesh.vertices[:, 2]    # Just Z
+        
+        # Calculate distances to all terrain vertices
+        distances = np.sqrt(
+            (terrain_xy[:, 0] - centroid_x)**2 + 
+            (terrain_xy[:, 1] - centroid_y)**2
+        )
+        
+        # Find nearest vertex
+        nearest_idx = np.argmin(distances)
+        base_elevation = terrain_z[nearest_idx]
+        
+        return float(base_elevation)
     
     def estimate_height(self, building_type: str, levels: int = None) -> float:
         """

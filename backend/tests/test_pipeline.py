@@ -26,11 +26,11 @@ def test_full_pipeline():
         print("❌ MAPBOX_ACCESS_TOKEN not found in .env")
         return False
     
-    # Test area: Small SF region
-    north = 37.7779
-    south = 37.7719
-    east = -122.4294
-    west = -122.4394
+    # Test area: University of Waterloo, Ontario (2km × 2km)
+    north = 43.482620
+    south = 43.464602
+    east = -80.525265
+    west = -80.550290
     
     print(f"📍 Test area:")
     print(f"   North: {north}, South: {south}")

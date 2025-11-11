@@ -87,7 +87,8 @@ class MeshGenerator:
             
             if building_data:
                 print("⏳ Extruding buildings...")
-                building_extruder = BuildingExtruder(center_lat, center_lon)
+                # Pass terrain mesh so buildings can sit on terrain
+                building_extruder = BuildingExtruder(center_lat, center_lon, terrain_mesh)
                 building_meshes = building_extruder.extrude_buildings(
                     building_data, min_height=3.0
                 )

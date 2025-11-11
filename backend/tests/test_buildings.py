@@ -18,11 +18,11 @@ def test_building_extrusion():
     
     print("🏢 Testing Building Extrusion\n")
     
-    # Test area: Small SF region
-    north = 37.7779
-    south = 37.7719
-    east = -122.4294
-    west = -122.4394
+    # Test area: University of Waterloo, Ontario (2km × 2km)
+    north = 43.482620
+    south = 43.464602
+    east = -80.525265
+    west = -80.550290
     
     center_lat = (north + south) / 2
     center_lon = (east + west) / 2

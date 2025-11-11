@@ -63,7 +63,7 @@ Generates 3D terrain mesh from elevation data. Expected: 131k vertices, 260k tri
 python tests/test_buildings.py
 ```
 
-Extrudes building footprints to 3D boxes. Expected: 1081 buildings, 31k vertices, 62k faces. Exports to `temp/test_buildings.obj`.
+Extrudes building footprints to 3D boxes with proper triangulation. Expected: 1211 buildings, 20k vertices. Exports to `temp/test_buildings.obj`.
 
 ### Test Full Pipeline
 
@@ -71,7 +71,7 @@ Extrudes building footprints to 3D boxes. Expected: 1081 buildings, 31k vertices
 python tests/test_pipeline.py
 ```
 
-Complete pipeline: terrain + buildings merged. Expected: 162k vertices, 322k faces. Exports to `temp/scene.obj`.
+Complete pipeline: terrain + buildings merged with proper elevation. Expected: 86k vertices, 166k faces. Exports to `temp/scene.obj`.
 
 ## API Documentation
 
@@ -123,13 +123,15 @@ backend/
   - Triangle face generation, origin centering
   - Tested: 131k vertices, 260k triangles, exports to .obj
 - **Building extrusion**
-  - 2D footprints → 3D boxes with height estimation
-  - Bottom/top/wall face generation, coordinate transformation
-  - Tested: 1081 buildings, 100% success rate, 31k vertices
+  - 2D footprints → 3D boxes with proper polygon triangulation
+  - Terrain elevation sampling for accurate placement
+  - Concave polygon support (L-shapes, U-shapes)
+  - Tested: 1211 buildings, 100% success rate, buildings sit on terrain
 - **Full pipeline integration** (Days 3-4 complete)
   - End-to-end: bbox → terrain + buildings → merged OBJ
   - Coordinate system alignment, mesh centering
-  - Tested: 162k vertices, 322k faces, 25MB OBJ export
+  - Terrain elevation sampling for building placement
+  - Tested: 86k vertices, 166k faces, buildings sit on terrain
 
 ### ⚠️ Known Issues & Standards
 

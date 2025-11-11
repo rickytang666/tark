@@ -32,12 +32,11 @@ def test_mapbox_fetcher():
     
     print("🗺️  Testing Mapbox Terrain-RGB Fetcher\n")
     
-    # Test area: Small region near San Francisco (Alamo Square area)
-    # This is a small area with some hills, good for testing
-    north = 37.7779
-    south = 37.7719
-    east = -122.4294
-    west = -122.4394
+    # Test area: University of Waterloo, Ontario (2km × 2km)
+    north = 43.482620
+    south = 43.464602
+    east = -80.525265
+    west = -80.550290
     
     print(f"📍 Fetching elevation data for:")
     print(f"   North: {north}")
