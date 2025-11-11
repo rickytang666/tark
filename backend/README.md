@@ -55,7 +55,15 @@ Fetches building footprints from OSM. Expected: ~1000 buildings with height/type
 python tests/test_terrain.py
 ```
 
-Generates 3D terrain mesh from elevation data. Expected: 131k vertices, 260k triangles. Exports to `temp/test_terrain.obj` for visualization.
+Generates 3D terrain mesh from elevation data. Expected: 131k vertices, 260k triangles. Exports to `temp/test_terrain.obj`.
+
+### Test Building Extrusion
+
+```bash
+python tests/test_buildings.py
+```
+
+Extrudes building footprints to 3D boxes. Expected: 1081 buildings, 31k vertices, 62k faces. Exports to `temp/test_buildings.obj`.
 
 ## API Documentation
 
@@ -82,7 +90,8 @@ backend/
 ├── tests/
 │   ├── test_mapbox.py        # Test Mapbox terrain fetcher
 │   ├── test_overpass.py      # Test Overpass building fetcher
-│   └── test_terrain.py       # Test terrain mesh generation
+│   ├── test_terrain.py       # Test terrain mesh generation
+│   └── test_buildings.py     # Test building extrusion
 ├── requirements.txt
 └── temp/                     # Temporary file storage
 ```
@@ -104,12 +113,16 @@ backend/
   - Elevation grid → 3D mesh with coordinate transformation
   - Triangle face generation, origin centering
   - Tested: 131k vertices, 260k triangles, exports to .obj
+- **Building extrusion**
+  - 2D footprints → 3D boxes with height estimation
+  - Bottom/top/wall face generation, coordinate transformation
+  - Tested: 1081 buildings, 100% success rate, 31k vertices
 
 ### 🚧 In Progress (Days 3-4)
 
-- Building extrusion logic
-- Mesh merging and optimization
-- OBJ/MTL export
+- Mesh merging (terrain + buildings)
+- OBJ/MTL export with materials
+- Full pipeline integration
 
 ### 📋 TODO
 
