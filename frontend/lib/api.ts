@@ -32,11 +32,9 @@ export async function checkHealth(): Promise<boolean> {
 }
 
 /**
- * Generate mesh for the given bounding box
+ * Generate mesh for the given bounding box and trigger download
  */
-export async function generateMesh(
-  bbox: BoundingBox
-): Promise<GenerateResponse> {
+export async function generateMesh(bbox: BoundingBox): Promise<void> {
   const response = await fetch(`${API_URL}/generate`, {
     method: "POST",
     headers: {
@@ -46,11 +44,25 @@ export async function generateMesh(
   });
 
   if (!response.ok) {
-    const error = await response.json();
+    const error = await response.json().catch(() => ({ detail: "Failed to generate mesh" }));
     throw new Error(error.detail || "Failed to generate mesh");
   }
 
-  return response.json();
+  // Get filename from response headers or use default
+  const contentDisposition = response.headers.get("content-disposition");
+  const filenameMatch = contentDisposition?.match(/filename="?(.+)"?/i);
+  const filename = filenameMatch ? filenameMatch[1] : "geomesh.obj";
+
+  // Download file
+  const blob = await response.blob();
+  const url = window.URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  window.URL.revokeObjectURL(url);
 }
 
 /**

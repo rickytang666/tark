@@ -4,11 +4,13 @@ Generates game-ready 3D meshes from real-world locations
 """
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 from typing import Optional
 import os
 import math
 from dotenv import load_dotenv
+from app.generator import MeshGenerator
 
 # Load environment variables from .env file
 load_dotenv()
@@ -102,25 +104,39 @@ async def generate_mesh(bbox: BoundingBox):
         bbox: Geographic bounding box (north, south, east, west)
     
     Returns:
-        File stream with .obj mesh (MVP: direct response)
-        Future: { job_id, status } for async processing
+        File stream with .obj mesh
     """
     try:
         # Validate bounding box
         bbox.validate_bbox()
         
-        # TODO: Implement mesh generation pipeline
-        # 1. Fetch elevation data (Mapbox Terrain-RGB)
-        # 2. Fetch building footprints (Overpass API)
-        # 3. Generate terrain mesh
-        # 4. Extrude buildings
-        # 5. Merge and export
+        # Get Mapbox token
+        mapbox_token = os.getenv("MAPBOX_ACCESS_TOKEN")
+        if not mapbox_token:
+            raise HTTPException(
+                status_code=500,
+                detail="MAPBOX_ACCESS_TOKEN not configured"
+            )
         
-        return {
-            "message": "Mesh generation not yet implemented",
-            "bbox": bbox.dict(),
-            "status": "pending"
-        }
+        # Generate mesh
+        generator = MeshGenerator(TEMP_DIR, mapbox_token)
+        obj_path, mtl_path = generator.generate(
+            north=bbox.north,
+            south=bbox.south,
+            east=bbox.east,
+            west=bbox.west,
+            include_buildings=True
+        )
+        
+        # Return OBJ file
+        if not os.path.exists(obj_path):
+            raise HTTPException(status_code=500, detail="Generated file not found")
+        
+        return FileResponse(
+            path=obj_path,
+            media_type="application/octet-stream",
+            filename="geomesh.obj"
+        )
         
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))

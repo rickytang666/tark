@@ -3,6 +3,7 @@
 import { useState } from "react";
 import dynamic from "next/dynamic";
 import AreaPreview from "@/components/AreaPreview";
+import DownloadButton from "@/components/DownloadButton";
 
 // dynamic import to avoid SSR issues with leaflet
 const MapSelector = dynamic(() => import("@/components/MapSelector"), {
@@ -40,8 +41,9 @@ export default function Home() {
             <MapSelector onBoundsChange={setBounds} />
           </div>
 
-          <div>
+          <div className="space-y-4">
             <AreaPreview bounds={bounds} />
+            <DownloadButton bounds={bounds} />
           </div>
         </div>
 
