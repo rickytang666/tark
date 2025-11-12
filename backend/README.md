@@ -133,8 +133,6 @@ backend/
 - bounding box fallback → no disappearing buildings
 - statistics tracking → transparency
 
-**result**: 80% → 95-98% shape accuracy
-
 ### known limitations
 
 - bbox requirements: 1km × 1km minimum, 5km × 5km maximum
