@@ -168,6 +168,9 @@ class OverpassFetcher:
         """
         Parse a relation (complex building) into building data
         
+        Handles complex buildings with multiple outer ways (L-shaped, U-shaped, etc.)
+        and inner ways (courtyards/holes).
+        
         Args:
             relation: Relation element from OSM
             nodes: Dictionary of node_id -> node data
@@ -179,28 +182,55 @@ class OverpassFetcher:
         tags = relation.get("tags", {})
         members = relation.get("members", [])
         
-        # Get outer way coordinates
+        # Get outer and inner ways
         outer_ways = [m for m in members if m.get("role") == "outer" and m["type"] == "way"]
+        inner_ways = [m for m in members if m.get("role") == "inner" and m["type"] == "way"]
         
         if not outer_ways:
             return None
         
-        # For MVP, just use first outer way
-        way_id = outer_ways[0]["ref"]
-        if way_id not in ways:
+        # Parse ALL outer ways (not just first!) to preserve complex shapes
+        all_outer_coordinates = []
+        for outer_way_member in outer_ways:
+            way_id = outer_way_member["ref"]
+            if way_id not in ways:
+                continue
+            
+            way = ways[way_id]
+            node_ids = way.get("nodes", [])
+            
+            for node_id in node_ids:
+                if node_id in nodes:
+                    node = nodes[node_id]
+                    all_outer_coordinates.append([node["lon"], node["lat"]])
+        
+        if len(all_outer_coordinates) < 3:
             return None
         
-        way = ways[way_id]
-        node_ids = way.get("nodes", [])
-        
+        # Remove duplicate consecutive points (where ways connect)
         coordinates = []
-        for node_id in node_ids:
-            if node_id in nodes:
-                node = nodes[node_id]
-                coordinates.append([node["lon"], node["lat"]])
+        for i, coord in enumerate(all_outer_coordinates):
+            if i == 0 or coord != coordinates[-1]:
+                coordinates.append(coord)
         
-        if len(coordinates) < 3:
-            return None
+        # Parse inner ways (courtyards/holes)
+        holes = []
+        for inner_way_member in inner_ways:
+            way_id = inner_way_member["ref"]
+            if way_id not in ways:
+                continue
+            
+            way = ways[way_id]
+            node_ids = way.get("nodes", [])
+            
+            hole_coords = []
+            for node_id in node_ids:
+                if node_id in nodes:
+                    node = nodes[node_id]
+                    hole_coords.append([node["lon"], node["lat"]])
+            
+            if len(hole_coords) >= 3:
+                holes.append(hole_coords)
         
         building_type = tags.get("building", "yes")
         height = self._extract_height(tags)
@@ -211,6 +241,7 @@ class OverpassFetcher:
             "id": relation["id"],
             "type": "relation",
             "coordinates": coordinates,
+            "holes": holes,  # NEW: Support for courtyards
             "building_type": building_type,
             "height": height,
             "levels": levels,
