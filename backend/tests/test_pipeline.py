@@ -80,7 +80,7 @@ def test_full_pipeline():
         
         print("\n💾 Complete scene exported!")
         print(f"   Import {obj_path} into Blender/Unity")
-        print("   You should see SF terrain with 1000+ buildings!")
+        print("   You should see uwaterloo terrain with buildings!")
         
         print("\n✅ Full pipeline test passed!")
         return True

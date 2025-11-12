@@ -39,7 +39,7 @@ Server runs at `http://localhost:8000`
 python tests/test_mapbox.py
 ```
 
-Fetches elevation data for SF area. Expected: ~131k elevation points, 2 tiles, -1.5m to 282m range.
+Fetches elevation data for uwaterloo area. Expected: ~131k elevation points, 2 tiles.
 
 ### Test Overpass Building Fetcher
 
@@ -113,7 +113,7 @@ backend/
 - **Mapbox Terrain-RGB fetcher**
   - Multi-tile fetching and stitching
   - RGB→elevation decoding
-  - Tested: 131k elevation points for 0.74 km² SF area
+  - Tested: 131k elevation points for uwaterloo area
 - **Overpass API building fetcher**
   - OSM building queries with way/relation parsing
   - Height/level/type metadata extraction

@@ -18,10 +18,10 @@ def test_bbox_validation():
     print("Test 1: 100m × 100m (too small)")
     try:
         bbox = BoundingBox(
-            north=37.7749,
-            south=37.7739,  # ~100m
-            east=-122.4334,
-            west=-122.4344  # ~100m
+            north=43.4730,
+            south=43.4721,  # ~100m
+            east=-80.5430,
+            west=-80.5439  # ~100m
         )
         bbox.validate_bbox()
         print("   ❌ Should have failed but didn't\n")
@@ -32,10 +32,10 @@ def test_bbox_validation():
     print("Test 2: 1.5km × 1.5km (good size)")
     try:
         bbox = BoundingBox(
-            north=37.7814,
-            south=37.7679,  # ~1.5km
-            east=-122.4244,
-            west=-122.4424  # ~1.5km
+            north=43.4797,
+            south=43.4662,  # ~1.5km
+            east=-80.5364,
+            west=-80.5544  # ~1.5km
         )
         bbox.validate_bbox()
         print("   ✅ Accepted\n")
@@ -46,10 +46,10 @@ def test_bbox_validation():
     print("Test 3: 6km × 6km (too large)")
     try:
         bbox = BoundingBox(
-            north=37.8000,
-            south=37.7460,  # ~6km
-            east=-122.3800,
-            west=-122.4600  # ~6km
+            north=43.5000,
+            south=43.4460,  # ~6km
+            east=-80.5000,
+            west=-80.5800  # ~6km
         )
         bbox.validate_bbox()
         print("   ❌ Should have failed but didn't\n")
@@ -60,10 +60,10 @@ def test_bbox_validation():
     print("Test 4: 2km × 2km (ideal size)")
     try:
         bbox = BoundingBox(
-            north=37.7839,
-            south=37.7659,  # ~2km
-            east=-122.4144,
-            west=-122.4424  # ~2km
+            north=43.4822,
+            south=43.4642,  # ~2km
+            east=-80.5254,
+            west=-80.5504  # ~2km
         )
         bbox.validate_bbox()
         print("   ✅ Accepted (ideal size for realistic terrain)\n")

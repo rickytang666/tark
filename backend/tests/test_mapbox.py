@@ -78,11 +78,11 @@ def test_mapbox_fetcher():
             print("   ❌ Array has invalid dimensions")
             return False
         
-        # San Francisco area should have elevations roughly between 0-300m
+        # uwaterloo area should have reasonable elevations
         if -100 < metadata['min_elevation'] < 500 and 0 < metadata['max_elevation'] < 500:
-            print("   ✅ Elevation values look reasonable for SF area")
+            print("   ✅ Elevation values look reasonable")
         else:
-            print(f"   ⚠️  Elevation values seem unusual (expected 0-300m range)")
+            print(f"   ⚠️  Elevation values seem unusual")
         
         if metadata['tiles_fetched'] > 0:
             print(f"   ✅ Fetched {metadata['tiles_fetched']} tile(s)")

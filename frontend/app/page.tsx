@@ -1,44 +1,54 @@
-export default function Home() {
-  return (
-    <div className="flex min-h-screen flex-col items-center justify-center bg-neutral-950 px-4 text-neutral-100">
-      <main className="w-full max-w-2xl">
-        <h1 className="mb-2 text-2xl font-medium">geomesh</h1>
-        <p className="mb-12 text-sm text-neutral-500">
-          turn locations into 3d meshes for games
-        </p>
+"use client";
 
-        <div className="mb-8 rounded border border-neutral-800 bg-neutral-900 p-8 text-center">
-          <div className="mb-4 text-4xl text-neutral-600">[ ]</div>
-          <p className="text-sm text-neutral-400">map interface coming soon</p>
-          <p className="mt-1 text-xs text-neutral-600">
-            leaflet integration next
+import { useState } from "react";
+import dynamic from "next/dynamic";
+import AreaPreview from "@/components/AreaPreview";
+
+// dynamic import to avoid SSR issues with leaflet
+const MapSelector = dynamic(() => import("@/components/MapSelector"), {
+  ssr: false,
+  loading: () => (
+    <div className="h-[500px] w-full rounded border border-neutral-800 bg-neutral-900 flex items-center justify-center">
+      <p className="text-sm text-neutral-500">loading map...</p>
+    </div>
+  ),
+});
+
+export default function Home() {
+  const [bounds, setBounds] = useState<{
+    north: number;
+    south: number;
+    east: number;
+    west: number;
+  } | null>(null);
+
+  return (
+    <div className="min-h-screen bg-neutral-950 px-4 py-8 text-neutral-100">
+      <div className="mx-auto max-w-5xl">
+        <div className="mb-8">
+          <h1 className="mb-2 text-2xl font-medium">geomesh</h1>
+          <p className="text-sm text-neutral-500">
+            turn locations into 3d meshes for games
+          </p>
+          <p className="mt-2 text-xs text-neutral-600">
+            hold shift and drag to select area
           </p>
         </div>
 
-        <div className="space-y-3 text-sm">
-          <div className="flex gap-3">
-            <span className="text-neutral-600">→</span>
-            <div>
-              <span className="text-neutral-300">select area on map</span>
-              <span className="ml-2 text-neutral-600">draw rectangle</span>
-            </div>
+        <div className="grid gap-6 lg:grid-cols-3">
+          <div className="lg:col-span-2">
+            <MapSelector onBoundsChange={setBounds} />
           </div>
-          <div className="flex gap-3">
-            <span className="text-neutral-600">→</span>
-            <div>
-              <span className="text-neutral-300">preview size</span>
-              <span className="ml-2 text-neutral-600">1-5km validation</span>
-            </div>
-          </div>
-          <div className="flex gap-3">
-            <span className="text-neutral-600">→</span>
-            <div>
-              <span className="text-neutral-300">download .obj</span>
-              <span className="ml-2 text-neutral-600">terrain + buildings</span>
-            </div>
+
+          <div>
+            <AreaPreview bounds={bounds} />
           </div>
         </div>
-      </main>
+
+        <div className="mt-8 border-t border-neutral-800 pt-4 text-xs text-neutral-600">
+          <p>fastapi + next.js + mapbox + openstreetmap</p>
+        </div>
+      </div>
     </div>
   );
 }
