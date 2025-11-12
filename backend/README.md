@@ -105,52 +105,39 @@ backend/
 └── temp/                     # Temporary file storage
 ```
 
-## Development Status
+## status
 
-### ✅ Completed (Days 1-2)
+### completed
 
-- FastAPI project structure with CORS, validation, health checks
-- **Mapbox Terrain-RGB fetcher**
-  - Multi-tile fetching and stitching
-  - RGB→elevation decoding
-  - Tested: 131k elevation points for uwaterloo area
-- **Overpass API building fetcher**
-  - OSM building queries with way/relation parsing
-  - Height/level/type metadata extraction
-  - Tested: 1081 buildings with 87% height coverage
-- **Terrain mesh generation**
-  - Elevation grid → 3D mesh with coordinate transformation
-  - Triangle face generation, origin centering
-  - Tested: 131k vertices, 260k triangles, exports to .obj
-- **Building extrusion**
-  - 2D footprints → 3D boxes with proper polygon triangulation
-  - Terrain elevation sampling for accurate placement
-  - Concave polygon support (L-shapes, U-shapes)
-  - Tested: 1211 buildings, 100% success rate, buildings sit on terrain
-- **Full pipeline integration** (Days 3-4 complete)
-  - End-to-end: bbox → terrain + buildings → merged OBJ
-  - Coordinate system alignment, mesh centering
-  - Terrain elevation sampling for building placement
-  - Tested: 86k vertices, 166k faces, buildings sit on terrain
+- fastapi with cors, validation, health checks
+- mapbox terrain-rgb fetcher (multi-tile stitching, rgb→elevation)
+- overpass api building fetcher (osm ways/relations parsing)
+- terrain mesh generation (131k vertices, 260k triangles)
+- building extrusion with proper triangulation
+  - parses ALL outer ways from relations (complex shapes preserved)
+  - supports inner ways (courtyards/holes)
+  - bounding box fallback for failed extrusions
+  - 100% success rate with statistics tracking
+- full pipeline: bbox → terrain + buildings → merged obj
 
-### ⚠️ Known Issues & Standards
+### building shape accuracy fixes
 
-**IMPORTANT:** See `STANDARDS.md` for detailed specifications.
+**fixed issue**: buildings were losing complex shapes (L/U/H-shaped)
 
-- **Bbox size requirements**: Minimum 1km × 1km, recommended 1.5-2km × 2km, maximum 5km × 5km
-- **Unit standard**: 1 OBJ unit = 1 real-world meter (no scaling)
-- **Terrain bbox cropping**: Mapbox tiles not cropped to exact bbox. Small areas (<1km) show vertical exaggeration.
-- **Overpass API timeouts**: OSM Overpass API can timeout under load. Retry with increased timeout or test without buildings.
+**root cause**: `overpass.py` only used first outer way from osm relations
 
-### 🚧 Next Steps
+**solution**:
 
-- Frontend (Next.js + Leaflet map interface)
-- API integration with FastAPI backend
-- Material/texture support
+- parse ALL outer ways → complex shapes preserved
+- support inner ways → courtyards work
+- bounding box fallback → no disappearing buildings
+- statistics tracking → transparency
 
-### 📋 TODO
+### known limitations
 
-- Mesh merging and optimization
-- OBJ/MTL export
-- Error handling and validation
-- Testing with real coordinates
+- bbox requirements: 1km × 1km minimum, 5km × 5km maximum
+- unit: 1 obj unit = 1 meter
+- osm data completeness varies by location
+- overpass api can timeout (increase timeout if needed)
+
+see `STANDARDS.md` and `ACCURACY_ANALYSIS.md` for details
