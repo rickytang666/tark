@@ -105,6 +105,18 @@ backend/
 └── temp/                     # Temporary file storage
 ```
 
+## Using in Blender
+
+**Import:** Drag only the `.obj` file into Blender. The `.mtl` and texture `.png` files must be in the same directory - Blender will load them automatically.
+
+**Required files:**
+
+- `scene.obj` (or `geomesh.obj`)
+- `scene.mtl` (same name as OBJ)
+- `material_0.png` (texture file referenced by MTL)
+
+All three files must be in the same folder for textures to load properly.
+
 ## status
 
 ### completed

@@ -77,6 +77,10 @@ geomesh/
 - bbox: 1-5km (min 1km to prevent distortion)
 - scale: 1 obj unit = 1 meter
 - coords: wgs84 → utm → local tangent plane
-- output: obj + mtl
+- output: obj + mtl + texture png
+
+## using in blender
+
+Import only the `.obj` file. The `.mtl` and texture `.png` files must be in the same directory - Blender loads them automatically. All three files (obj, mtl, png) must be together.
 
 see [backend/STANDARDS.md](backend/STANDARDS.md)
