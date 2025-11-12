@@ -1,36 +1,64 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# geomesh frontend
 
-## Getting Started
+next.js web interface for generating 3d meshes from real locations.
 
-First, run the development server:
+## setup
 
 ```bash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+opens at `http://localhost:3000`
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### env vars
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+create `.env`:
 
-## Learn More
+```
+NEXT_PUBLIC_API_URL=http://localhost:8000
+```
 
-To learn more about Next.js, take a look at the following resources:
+## structure
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+```
+app/
+  page.tsx          # landing page
+  layout.tsx        # root layout
+components/         # react components (next phase)
+lib/
+  api.ts           # backend api client
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## scripts
 
-## Deploy on Vercel
+```bash
+npm run dev        # dev server (turbopack)
+npm run build      # production build
+npm run lint       # eslint
+npm run type-check # typescript check
+```
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## api client
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+```typescript
+import { generateMesh, calculateAreaSize } from "@/lib/api";
+
+// generate mesh
+const result = await generateMesh({
+  north: 37.8,
+  south: 37.75,
+  east: -122.4,
+  west: -122.45,
+});
+
+// calculate area
+const { width, height, area } = calculateAreaSize(bbox);
+```
+
+## next steps
+
+- leaflet map integration
+- rectangle selection tool
+- area preview ui
+- validation feedback

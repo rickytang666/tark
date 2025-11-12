@@ -1,3 +1,14 @@
 # markdown
 *.md
 !README.md
+
+# Backend
+backend/venv
+backend/.env
+backend/temp/*.obj
+
+# Frontend
+frontend/node_modules
+frontend/.next
+frontend/.env*.local
+frontend/.turbopack
