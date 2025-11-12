@@ -120,12 +120,13 @@ async def generate_mesh(bbox: BoundingBox):
         
         # Generate mesh
         generator = MeshGenerator(TEMP_DIR, mapbox_token)
-        obj_path, mtl_path = generator.generate(
+        obj_path, mtl_path, texture_files = generator.generate(
             north=bbox.north,
             south=bbox.south,
             east=bbox.east,
             west=bbox.west,
-            include_buildings=True
+            include_buildings=True,
+            include_textures=True
         )
         
         # Return OBJ file
