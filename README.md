@@ -81,6 +81,6 @@ geomesh/
 
 ## using in blender
 
-Import only the `.obj` file. The `.mtl` and texture `.png` files must be in the same directory - Blender loads them automatically. All three files (obj, mtl, png) must be together.
+Download returns a ZIP file with all files (obj, mtl, png). Extract the ZIP and drag the `.obj` file into Blender - textures load automatically.
 
 see [backend/STANDARDS.md](backend/STANDARDS.md)

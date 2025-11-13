@@ -142,18 +142,42 @@ class MeshGenerator:
         output_path = os.path.join(self.temp_dir, "scene")
         
         # If we have a terrain texture, set it in the mesh visual
+        # Need to recreate TextureVisuals after merge since merge loses visual data
         if terrain_texture_path and os.path.exists(terrain_texture_path):
-            # Trimesh will reference the texture in the MTL file
-            if hasattr(final_mesh.visual, 'material'):
-                final_mesh.visual.material.image = terrain_texture_path
+            from PIL import Image
+            
+            # Load the texture image
+            texture_image = Image.open(terrain_texture_path)
+            
+            # Recreate visual with texture
+            # Only the first mesh (terrain) has UVs, so we need to preserve those
+            if hasattr(terrain_mesh.visual, 'uv') and terrain_mesh.visual.uv is not None:
+                # Create UV array for final mesh (pad with zeros for building vertices)
+                import numpy as np
+                terrain_vertex_count = len(terrain_mesh.vertices)
+                final_vertex_count = len(final_mesh.vertices)
+                
+                # Create UV array: terrain UVs + zeros for buildings
+                final_uvs = np.zeros((final_vertex_count, 2))
+                final_uvs[:terrain_vertex_count] = terrain_mesh.visual.uv
+                
+                # Create TextureVisuals with UVs and material
+                final_mesh.visual = trimesh.visual.TextureVisuals(
+                    uv=final_uvs,
+                    image=texture_image
+                )
         
         obj_path = export_obj(final_mesh, output_path, include_normals=True)
         print(f"✅ Exported to: {obj_path}\n")
         
-        # MTL file path (if created by trimesh)
-        mtl_path = f"{output_path}.mtl"
+        # MTL file path (trimesh creates it as material.mtl in the same directory)
+        obj_dir = os.path.dirname(obj_path)
+        mtl_path = os.path.join(obj_dir, "material.mtl")
         if not os.path.exists(mtl_path):
-            mtl_path = None
+            # Fallback to scene.mtl
+            mtl_path = f"{output_path}.mtl"
+            if not os.path.exists(mtl_path):
+                mtl_path = None
         
         return obj_path, mtl_path, texture_files
 

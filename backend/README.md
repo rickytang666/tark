@@ -107,15 +107,22 @@ backend/
 
 ## Using in Blender
 
-**Import:** Drag only the `.obj` file into Blender. The `.mtl` and texture `.png` files must be in the same directory - Blender will load them automatically.
+**Download:** The API returns a ZIP file (`geomesh.zip`) containing all necessary files.
 
-**Required files:**
+**Extract and Import:**
 
-- `scene.obj` (or `geomesh.obj`)
-- `scene.mtl` (same name as OBJ)
-- `material_0.png` (texture file referenced by MTL)
+1. Extract the ZIP file to a folder
+2. Drag only the `.obj` file into Blender
+3. Textures load automatically
 
-All three files must be in the same folder for textures to load properly.
+**Files in ZIP:**
+
+- `scene.obj` - 3D mesh geometry
+- `material.mtl` - Material definitions
+- `material_0.png` - Satellite texture for terrain
+- `terrain.png` - Original satellite image (optional)
+
+All files must be in the same folder for textures to load properly.
 
 ## status
 
