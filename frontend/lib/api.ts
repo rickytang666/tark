@@ -1,5 +1,5 @@
 /**
- * API client for GeoMesh backend
+ * API client for Tark backend
  */
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
@@ -51,7 +51,7 @@ export async function generateMesh(bbox: BoundingBox): Promise<void> {
   // Get filename from response headers or use default
   const contentDisposition = response.headers.get("content-disposition");
   const filenameMatch = contentDisposition?.match(/filename="?(.+)"?/i);
-  const filename = filenameMatch ? filenameMatch[1] : "geomesh.obj";
+  const filename = filenameMatch ? filenameMatch[1] : "tark.obj";
 
   // Download file
   const blob = await response.blob();

@@ -1,4 +1,4 @@
-# geomesh frontend
+# Tark frontend
 
 next.js web interface for generating 3d meshes from real locations.
 

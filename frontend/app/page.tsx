@@ -27,7 +27,7 @@ export default function Home() {
     <div className="min-h-screen bg-neutral-950 px-4 py-8 text-neutral-100">
       <div className="mx-auto max-w-5xl">
         <div className="mb-8">
-          <h1 className="mb-2 text-2xl font-medium">geomesh</h1>
+          <h1 className="mb-2 text-2xl font-medium">Tark</h1>
           <p className="text-sm text-neutral-500">
             turn locations into 3d meshes for games
           </p>

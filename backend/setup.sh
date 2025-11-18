@@ -8,7 +8,7 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
-echo -e "${BLUE}🚀 GeoMesh Backend Setup${NC}\n"
+echo -e "${BLUE}🚀 Tark Backend Setup${NC}\n"
 
 # Check Python
 if ! command -v python3 &> /dev/null; then

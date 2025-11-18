@@ -1,5 +1,5 @@
 """
-GeoMesh Backend - FastAPI Application
+Tark Backend - FastAPI Application
 Generates game-ready 3D meshes from real-world locations
 """
 from fastapi import FastAPI, HTTPException
@@ -16,7 +16,7 @@ from app.generator import MeshGenerator
 load_dotenv()
 
 app = FastAPI(
-    title="GeoMesh API",
+    title="Tark API",
     description="Generate game-ready 3D meshes from real-world locations",
     version="0.1.0"
 )
@@ -79,7 +79,7 @@ class BoundingBox(BaseModel):
 async def root():
     """Health check endpoint"""
     return {
-        "service": "GeoMesh API",
+        "service": "Tark API",
         "status": "operational",
         "version": "0.1.0"
     }
@@ -135,7 +135,7 @@ async def generate_mesh(bbox: BoundingBox):
         return FileResponse(
             path=obj_path,
             media_type="application/octet-stream",
-            filename="geomesh.obj"
+            filename="tark.obj"
         )
         
     except ValueError as e:
