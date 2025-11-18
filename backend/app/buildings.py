@@ -251,7 +251,7 @@ class BuildingExtruder:
         
         # Calculate distances to all terrain vertices (in X-Z plane)
         distances = np.sqrt(
-            (terrain_xz[:, 0] - centroid_x)**2 + 
+            (terrain_xz[:, 0] - centroid_x)**2 +
             (terrain_xz[:, 1] - centroid_z)**2
         )
         

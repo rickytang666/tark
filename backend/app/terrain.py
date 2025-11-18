@@ -64,7 +64,9 @@ class TerrainGenerator:
         # 6. Generate UV coordinates if requested
         uvs = None
         if generate_uvs:
-            uvs = self._generate_uvs(rows, cols)
+            # Pass the actual X-Z coordinates for planar projection
+            # This ensures UVs are based on horizontal position, not elevation
+            uvs = self._generate_uvs_from_positions(vertices[:, [0, 2]])
         
         # 7. Create mesh
         mesh = trimesh.Trimesh(vertices=vertices, faces=faces)
@@ -73,10 +75,8 @@ class TerrainGenerator:
         if uvs is not None:
             mesh.visual = trimesh.visual.TextureVisuals(uv=uvs)
         
-        # 9. Center X and Z at origin (but keep Y elevation intact)
-        centroid_xz = mesh.centroid.copy()
-        centroid_xz[1] = 0  # Don't center Y - keep real elevations
-        mesh.vertices -= centroid_xz
+        # Note: Do NOT center here - centering happens once at the end in generator.py
+        # This ensures buildings and terrain use the same coordinate system
         
         return mesh
     
@@ -120,35 +120,32 @@ class TerrainGenerator:
         
         return np.array(faces)
     
-    def _generate_uvs(self, rows: int, cols: int) -> np.ndarray:
+    def _generate_uvs_from_positions(self, xz_positions: np.ndarray) -> np.ndarray:
         """
-        Generate UV texture coordinates for terrain grid
+        Generate UV texture coordinates based on actual X-Z positions
         
-        Maps the terrain grid to texture space (0,0) to (1,1)
-        U = horizontal (columns), V = vertical (rows)
-        
-        UV coordinates map directly to the satellite image without flipping.
-        The mesh coordinates are negated, but the texture image is not transformed,
-        so UV mapping stays normal (0 to 1).
+        This creates a planar projection that ignores elevation (Y coordinate).
+        UVs are calculated from the horizontal position (X-Z plane) only,
+        preventing distortion caused by terrain elevation.
         
         Args:
-            rows: Number of rows in grid
-            cols: Number of columns in grid
+            xz_positions: Array of X-Z positions (N x 2) where N is number of vertices
         
         Returns:
-            Array of UV coordinates (N x 2) where N = rows * cols
+            Array of UV coordinates (N x 2) normalized to (0,1) range
         """
-        # Create normalized grid coordinates (0 to 1)
-        u = np.linspace(0, 1, cols)
-        v = np.linspace(0, 1, rows)
+        # Get min/max of X and Z coordinates
+        min_x = xz_positions[:, 0].min()
+        max_x = xz_positions[:, 0].max()
+        min_z = xz_positions[:, 1].min()
+        max_z = xz_positions[:, 1].max()
         
-        # Create 2D grid
-        u_grid, v_grid = np.meshgrid(u, v)
-        
-        # Flatten to vertex array
-        uvs = np.zeros((rows * cols, 2))
-        uvs[:, 0] = u_grid.flatten()  # U coordinate
-        uvs[:, 1] = v_grid.flatten()  # V coordinate
+        # Normalize X and Z to 0-1 range for UV coordinates
+        # Both U and V flipped because mesh X and Z are both negated
+        # This creates a 180 degree rotation to match the negated coordinate system
+        uvs = np.zeros((len(xz_positions), 2))
+        uvs[:, 0] = 1.0 - (xz_positions[:, 0] - min_x) / (max_x - min_x)  # U flipped (X negated)
+        uvs[:, 1] = (xz_positions[:, 1] - min_z) / (max_z - min_z)  # V normal
         
         return uvs
 

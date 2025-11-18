@@ -175,9 +175,9 @@ class MeshGenerator:
         mtl_path = os.path.join(obj_dir, "material.mtl")
         if not os.path.exists(mtl_path):
             # Fallback to scene.mtl
-            mtl_path = f"{output_path}.mtl"
-            if not os.path.exists(mtl_path):
-                mtl_path = None
+            mtl_path = os.path.join(obj_dir, "scene.mtl")
+        if not os.path.exists(mtl_path):
+            mtl_path = None
         
         return obj_path, mtl_path, texture_files
 
