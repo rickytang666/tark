@@ -8,7 +8,7 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "geomesh",
+  title: "Tark",
   description: "turn any location into a game-ready 3d mesh",
 };
 

@@ -1,4 +1,4 @@
-# geomesh
+# Tark
 
 turn any location into a game-ready 3d mesh. select an area, get terrain + buildings as .obj file for unity/unreal/blender.
 
@@ -66,7 +66,7 @@ runs at `http://localhost:3000`
 ## structure
 
 ```
-geomesh/
+tark/
 ├── frontend/       # next.js interface
 ├── backend/        # fastapi mesh generator
 └── plan/           # design docs

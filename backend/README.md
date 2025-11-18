@@ -1,4 +1,4 @@
-# GeoMesh Backend
+# Tark Backend
 
 FastAPI backend for generating game-ready 3D meshes from real-world locations.
 
