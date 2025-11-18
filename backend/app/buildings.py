@@ -227,9 +227,10 @@ class BuildingExtruder:
     
     def _sample_terrain_elevation(self, footprint_2d: np.ndarray) -> float:
         """
-        Sample the terrain elevation at a building's footprint
+        Sample the terrain elevation at a building's footprint using barycentric interpolation
         
-        Uses the center point of the footprint to query terrain mesh elevation.
+        Samples multiple points across the footprint and uses barycentric interpolation
+        on the terrain mesh triangles for accurate elevation values.
         
         Args:
             footprint_2d: 2D building footprint (N x 2) in X-Z plane
@@ -240,26 +241,70 @@ class BuildingExtruder:
         if self.terrain_mesh is None:
             return 0.0
         
-        # Calculate centroid of footprint (X-Z plane)
+        # Use centroid for fast sampling (can expand to multiple points later if needed)
         centroid_x = np.mean(footprint_2d[:, 0])
         centroid_z = np.mean(footprint_2d[:, 1])
         
-        # Find nearest terrain vertex to building centroid
-        # Terrain uses Y-up: X=east-west, Y=elevation, Z=north-south
-        terrain_xz = self.terrain_mesh.vertices[:, [0, 2]]  # Just X, Z
-        terrain_y = self.terrain_mesh.vertices[:, 1]        # Just Y (elevation)
+        # Get terrain vertices
+        terrain_vertices = self.terrain_mesh.vertices
+        terrain_xz = terrain_vertices[:, [0, 2]]  # X-Z positions
         
-        # Calculate distances to all terrain vertices (in X-Z plane)
-        distances = np.sqrt(
-            (terrain_xz[:, 0] - centroid_x)**2 +
-            (terrain_xz[:, 1] - centroid_z)**2
-        )
+        # Fast search: find nearest vertices using squared distances (faster than sqrt)
+        dx = terrain_xz[:, 0] - centroid_x
+        dz = terrain_xz[:, 1] - centroid_z
+        squared_distances = dx * dx + dz * dz
         
-        # Find nearest vertex
-        nearest_idx = np.argmin(distances)
-        base_elevation = terrain_y[nearest_idx]
+        # Get 4 nearest vertices (forming a quad for bilinear interpolation)
+        nearest_4_indices = np.argsort(squared_distances)[:4]
+        nearest_4_vertices = terrain_vertices[nearest_4_indices]
+        nearest_4_xz = terrain_xz[nearest_4_indices]
         
-        return float(base_elevation)
+        # Find the triangle containing the point using barycentric coordinates
+        point = np.array([centroid_x, centroid_z])
+        
+        for i in range(4):
+            for j in range(i + 1, 4):
+                for k in range(j + 1, 4):
+                    v0 = nearest_4_vertices[i]
+                    v1 = nearest_4_vertices[j]
+                    v2 = nearest_4_vertices[k]
+                    
+                    # Project to X-Z plane
+                    a = np.array([v0[0], v0[2]])
+                    b = np.array([v1[0], v1[2]])
+                    c = np.array([v2[0], v2[2]])
+                    
+                    # Barycentric coordinates
+                    v0_v1 = b - a
+                    v0_v2 = c - a
+                    v0_p = point - a
+                    
+                    dot00 = np.dot(v0_v2, v0_v2)
+                    dot01 = np.dot(v0_v2, v0_v1)
+                    dot02 = np.dot(v0_v2, v0_p)
+                    dot11 = np.dot(v0_v1, v0_v1)
+                    dot12 = np.dot(v0_v1, v0_p)
+                    
+                    denom = dot00 * dot11 - dot01 * dot01
+                    if abs(denom) < 1e-10:
+                        continue
+                    
+                    inv_denom = 1.0 / denom
+                    u = (dot11 * dot02 - dot01 * dot12) * inv_denom
+                    v = (dot00 * dot12 - dot01 * dot02) * inv_denom
+                    w = 1 - u - v
+                    
+                    if u >= 0 and v >= 0 and w >= 0:
+                        # Point is inside triangle - interpolate elevation
+                        elevation = w * v0[1] + u * v1[1] + v * v2[1]
+                        return float(elevation)
+        
+        # Fallback: inverse distance weighted average of 4 nearest vertices
+        distances = np.sqrt(squared_distances[nearest_4_indices])
+        weights = 1.0 / (distances + 1e-6)  # Avoid division by zero
+        weights /= weights.sum()
+        elevation = np.sum(weights * nearest_4_vertices[:, 1])
+        return float(elevation)
     
     def _create_bounding_box_fallback(
         self,

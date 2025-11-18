@@ -4,6 +4,7 @@ Orchestrates the entire process from bbox to 3D mesh
 """
 from typing import Tuple, Optional, List
 import os
+import math
 import trimesh
 from app.fetchers.mapbox import MapboxTerrainFetcher
 from app.fetchers.overpass import OverpassFetcher
@@ -66,11 +67,35 @@ class MeshGenerator:
         if include_textures:
             print("⏳ Fetching satellite imagery from Mapbox...")
             satellite_fetcher = MapboxSatelliteFetcher(self.mapbox_token)
+            
+            # Calculate aspect ratio of bounding box to fetch correct image dimensions
+            # This prevents distortion from square texture on rectangular area
+            lat_span = north - south
+            lon_span = east - west
+            
+            # Convert to approximate meters for aspect ratio
+            lat_meters = lat_span * 111000  # 1 degree lat ≈ 111km
+            lon_meters = lon_span * 111000 * abs(math.cos(math.radians(center_lat)))
+            
+            # Calculate aspect ratio
+            aspect_ratio = lon_meters / lat_meters if lat_meters > 0 else 1.0
+            
+            # Calculate image dimensions maintaining aspect ratio (max 1280x1280)
+            max_dimension = 1280
+            if aspect_ratio >= 1.0:
+                # Wider than tall
+                width = max_dimension
+                height = int(max_dimension / aspect_ratio)
+            else:
+                # Taller than wide
+                height = max_dimension
+                width = int(max_dimension * aspect_ratio)
+            
             terrain_texture_path = os.path.join(self.temp_dir, "terrain.png")
             try:
                 _, saved_path = satellite_fetcher.fetch_satellite_image(
                     north=north, south=south, east=east, west=west,
-                    width=1280, height=1280,
+                    width=width, height=height,
                     output_path=terrain_texture_path
                 )
                 if saved_path:
