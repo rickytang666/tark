@@ -130,10 +130,10 @@ class MeshGenerator:
         print("⏳ Merging meshes...")
         final_mesh = merge_meshes(meshes_to_merge)
         
-        # Center XY at origin, but preserve Z elevations
-        centroid_xy = final_mesh.centroid.copy()
-        centroid_xy[2] = 0  # Don't center Z
-        final_mesh.vertices -= centroid_xy
+        # Center X and Z at origin, but preserve Y elevations (Y-up coordinate system)
+        centroid_xz = final_mesh.centroid.copy()
+        centroid_xz[1] = 0  # Don't center Y - keep real elevations
+        final_mesh.vertices -= centroid_xz
         
         print(f"✅ Final mesh: {len(final_mesh.vertices):,} vertices, {len(final_mesh.faces):,} faces\n")
         

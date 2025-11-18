@@ -126,13 +126,17 @@ class BuildingExtruder:
         lons = [coord[0] for coord in coordinates]
         lats = [coord[1] for coord in coordinates]
         
-        xs, ys = self.transformer.latlon_array_to_local(
+        xs, zs = self.transformer.latlon_array_to_local(
             np.array(lats),
             np.array(lons)
         )
         
-        # Create 2D polygon
-        footprint_2d = np.column_stack([xs, ys])
+        # Negate X and Z for Unity/Blender convention
+        xs = -xs
+        zs = -zs
+        
+        # Create 2D polygon (X-Z plane, since Y is up)
+        footprint_2d = np.column_stack([xs, zs])
         
         # Convert holes (courtyards) to local meters
         holes_2d = []
@@ -142,11 +146,16 @@ class BuildingExtruder:
                 hole_lons = [coord[0] for coord in hole]
                 hole_lats = [coord[1] for coord in hole]
                 
-                hole_xs, hole_ys = self.transformer.latlon_array_to_local(
+                hole_xs, hole_zs = self.transformer.latlon_array_to_local(
                     np.array(hole_lats),
                     np.array(hole_lons)
                 )
-                holes_2d.append(np.column_stack([hole_xs, hole_ys]))
+                
+                # Negate X and Z for Unity/Blender convention
+                hole_xs = -hole_xs
+                hole_zs = -hole_zs
+                
+                holes_2d.append(np.column_stack([hole_xs, hole_zs]))
         
         # Sample terrain elevation if available
         base_elevation = 0.0
@@ -156,9 +165,9 @@ class BuildingExtruder:
         # Extrude to 3D (with holes if present)
         mesh = self._extrude_polygon(footprint_2d, height, holes_2d)
         
-        # Offset mesh to sit on terrain
+        # Offset mesh to sit on terrain (Y is up, so offset Y coordinate)
         if base_elevation != 0.0:
-            mesh.vertices[:, 2] += base_elevation
+            mesh.vertices[:, 1] += base_elevation
         
         return mesh
     
@@ -178,12 +187,12 @@ class BuildingExtruder:
         - Correct face winding and normals
         
         Args:
-            footprint_2d: 2D polygon vertices (N x 2)
-            height: Extrusion height in meters
+            footprint_2d: 2D polygon vertices (N x 2) in X-Z plane
+            height: Extrusion height in meters (along Y-axis)
             holes_2d: List of hole polygons for courtyards (optional)
         
         Returns:
-            trimesh.Trimesh of extruded building
+            trimesh.Trimesh of extruded building with Y-up coordinate system
         """
         # Create Shapely polygon with holes if present
         if holes_2d and len(holes_2d) > 0:
@@ -201,7 +210,18 @@ class BuildingExtruder:
         
         # Use trimesh's built-in extrusion with proper triangulation
         # This handles concave polygons and holes correctly
+        # Note: extrude_polygon extrudes along Z-axis by default
         mesh = trimesh.creation.extrude_polygon(polygon, height=height)
+        
+        # Rotate mesh to align with Y-up coordinate system
+        # trimesh extrudes along Z, but we want Y-up
+        # So we need to rotate: Z->Y, Y->-Z (90 degrees around X-axis)
+        rotation_matrix = trimesh.transformations.rotation_matrix(
+            angle=np.radians(-90),  # -90 degrees
+            direction=[1, 0, 0],     # around X-axis
+            point=[0, 0, 0]
+        )
+        mesh.apply_transform(rotation_matrix)
         
         return mesh
     
@@ -212,32 +232,32 @@ class BuildingExtruder:
         Uses the center point of the footprint to query terrain mesh elevation.
         
         Args:
-            footprint_2d: 2D building footprint (N x 2)
+            footprint_2d: 2D building footprint (N x 2) in X-Z plane
         
         Returns:
-            Base elevation in meters (Z coordinate)
+            Base elevation in meters (Y coordinate in Y-up system)
         """
         if self.terrain_mesh is None:
             return 0.0
         
-        # Calculate centroid of footprint
+        # Calculate centroid of footprint (X-Z plane)
         centroid_x = np.mean(footprint_2d[:, 0])
-        centroid_y = np.mean(footprint_2d[:, 1])
+        centroid_z = np.mean(footprint_2d[:, 1])
         
         # Find nearest terrain vertex to building centroid
-        # We use the terrain mesh vertices as elevation samples
-        terrain_xy = self.terrain_mesh.vertices[:, :2]  # Just X, Y
-        terrain_z = self.terrain_mesh.vertices[:, 2]    # Just Z
+        # Terrain uses Y-up: X=east-west, Y=elevation, Z=north-south
+        terrain_xz = self.terrain_mesh.vertices[:, [0, 2]]  # Just X, Z
+        terrain_y = self.terrain_mesh.vertices[:, 1]        # Just Y (elevation)
         
-        # Calculate distances to all terrain vertices
+        # Calculate distances to all terrain vertices (in X-Z plane)
         distances = np.sqrt(
-            (terrain_xy[:, 0] - centroid_x)**2 + 
-            (terrain_xy[:, 1] - centroid_y)**2
+            (terrain_xz[:, 0] - centroid_x)**2 + 
+            (terrain_xz[:, 1] - centroid_z)**2
         )
         
         # Find nearest vertex
         nearest_idx = np.argmin(distances)
-        base_elevation = terrain_z[nearest_idx]
+        base_elevation = terrain_y[nearest_idx]
         
         return float(base_elevation)
     
@@ -277,37 +297,49 @@ class BuildingExtruder:
             lons = [coord[0] for coord in coordinates]
             lats = [coord[1] for coord in coordinates]
             
-            xs, ys = self.transformer.latlon_array_to_local(
+            xs, zs = self.transformer.latlon_array_to_local(
                 np.array(lats),
                 np.array(lons)
             )
             
-            # Get bounding box
+            # Negate X and Z for Unity/Blender convention
+            xs = -xs
+            zs = -zs
+            
+            # Get bounding box (in X-Z plane)
             min_x, max_x = np.min(xs), np.max(xs)
-            min_y, max_y = np.min(ys), np.max(ys)
+            min_z, max_z = np.min(zs), np.max(zs)
             
             # Sample terrain elevation
             base_elevation = 0.0
             if self.terrain_mesh is not None:
-                centroid_2d = np.array([[np.mean(xs), np.mean(ys)]])
+                centroid_2d = np.array([[np.mean(xs), np.mean(zs)]])
                 base_elevation = self._sample_terrain_elevation(centroid_2d)
             
-            # Create simple box
+            # Create simple box (in X-Z plane)
             box_coords = np.array([
-                [min_x, min_y],
-                [max_x, min_y],
-                [max_x, max_y],
-                [min_x, max_y],
-                [min_x, min_y]  # Close the polygon
+                [min_x, min_z],
+                [max_x, min_z],
+                [max_x, max_z],
+                [min_x, max_z],
+                [min_x, min_z]  # Close the polygon
             ])
             
             # Extrude simple box
             polygon = Polygon(box_coords)
             mesh = trimesh.creation.extrude_polygon(polygon, height=height)
             
-            # Offset to terrain
+            # Rotate to Y-up coordinate system
+            rotation_matrix = trimesh.transformations.rotation_matrix(
+                angle=np.radians(-90),
+                direction=[1, 0, 0],
+                point=[0, 0, 0]
+            )
+            mesh.apply_transform(rotation_matrix)
+            
+            # Offset to terrain (Y is up)
             if base_elevation != 0.0:
-                mesh.vertices[:, 2] += base_elevation
+                mesh.vertices[:, 1] += base_elevation
             
             return mesh
             

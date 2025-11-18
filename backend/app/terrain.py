@@ -48,13 +48,15 @@ class TerrainGenerator:
         lon_grid, lat_grid = np.meshgrid(lons, lats)
         
         # 3. Transform to local coordinates (meters)
-        x_grid, y_grid = transformer.latlon_array_to_local(lat_grid, lon_grid)
+        x_grid, z_grid = transformer.latlon_array_to_local(lat_grid, lon_grid)
         
-        # 4. Create vertices (x, y, z)
+        # 4. Create vertices (x, y, z) with Y-up coordinate system
+        # Unity/Blender convention: negate X and Z to match bird's eye view orientation
+        # X = east-west, Y = elevation (up), Z = north-south
         vertices = np.zeros((rows * cols, 3))
-        vertices[:, 0] = x_grid.flatten()  # X (east-west)
-        vertices[:, 1] = y_grid.flatten()  # Y (north-south)
-        vertices[:, 2] = elevation_data.flatten()  # Z (elevation)
+        vertices[:, 0] = -x_grid.flatten()  # X (negated for Unity convention)
+        vertices[:, 1] = elevation_data.flatten()  # Y (elevation - UP)
+        vertices[:, 2] = -z_grid.flatten()  # Z (negated for Unity convention)
         
         # 5. Generate triangle faces
         faces = self._generate_faces(rows, cols)
@@ -71,10 +73,10 @@ class TerrainGenerator:
         if uvs is not None:
             mesh.visual = trimesh.visual.TextureVisuals(uv=uvs)
         
-        # 9. Center X and Y at origin (but keep Z elevation intact)
-        centroid_xy = mesh.centroid.copy()
-        centroid_xy[2] = 0  # Don't center Z - keep real elevations
-        mesh.vertices -= centroid_xy
+        # 9. Center X and Z at origin (but keep Y elevation intact)
+        centroid_xz = mesh.centroid.copy()
+        centroid_xz[1] = 0  # Don't center Y - keep real elevations
+        mesh.vertices -= centroid_xz
         
         return mesh
     
@@ -89,8 +91,11 @@ class TerrainGenerator:
         | /  |
         v2---v3
         
-        Triangle 1: (v0, v2, v1)
-        Triangle 2: (v1, v2, v3)
+        Triangle 1: (v0, v1, v2) - reversed winding for negated coordinates
+        Triangle 2: (v1, v3, v2) - reversed winding for negated coordinates
+        
+        Since we negate X and Z, we need to reverse the winding order
+        so faces point upward (positive Y direction).
         
         Args:
             rows: Number of rows in grid
@@ -109,9 +114,9 @@ class TerrainGenerator:
                 v2 = (r + 1) * cols + c
                 v3 = (r + 1) * cols + (c + 1)
                 
-                # Two triangles per cell
-                faces.append([v0, v2, v1])
-                faces.append([v1, v2, v3])
+                # Two triangles per cell (reversed winding for negated coords)
+                faces.append([v0, v1, v2])
+                faces.append([v1, v3, v2])
         
         return np.array(faces)
     
@@ -122,6 +127,10 @@ class TerrainGenerator:
         Maps the terrain grid to texture space (0,0) to (1,1)
         U = horizontal (columns), V = vertical (rows)
         
+        UV coordinates map directly to the satellite image without flipping.
+        The mesh coordinates are negated, but the texture image is not transformed,
+        so UV mapping stays normal (0 to 1).
+        
         Args:
             rows: Number of rows in grid
             cols: Number of columns in grid
@@ -129,7 +138,7 @@ class TerrainGenerator:
         Returns:
             Array of UV coordinates (N x 2) where N = rows * cols
         """
-        # Create normalized grid coordinates
+        # Create normalized grid coordinates (0 to 1)
         u = np.linspace(0, 1, cols)
         v = np.linspace(0, 1, rows)
         
@@ -142,4 +151,5 @@ class TerrainGenerator:
         uvs[:, 1] = v_grid.flatten()  # V coordinate
         
         return uvs
+
 
