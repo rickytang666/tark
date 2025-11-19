@@ -7,6 +7,7 @@ import {
   getQualityOptions,
   type MeshQuality,
   type QualityOption,
+  type ProgressInfo,
 } from "@/lib/api";
 
 interface DownloadButtonProps {
@@ -23,6 +24,7 @@ export default function DownloadButton({ bounds }: DownloadButtonProps) {
   const [error, setError] = useState<string | null>(null);
   const [quality, setQuality] = useState<MeshQuality>("medium");
   const [qualityOptions, setQualityOptions] = useState<QualityOption[]>([]);
+  const [progress, setProgress] = useState<ProgressInfo | null>(null);
 
   // Fetch quality options on mount
   useEffect(() => {
@@ -71,17 +73,23 @@ export default function DownloadButton({ bounds }: DownloadButtonProps) {
 
     setIsGenerating(true);
     setError(null);
+    setProgress({ percent: 0, message: "Starting...", status: "processing" });
 
     try {
-      await generateMesh(bounds, quality);
+      await generateMesh(bounds, quality, (progressInfo) => {
+        setProgress(progressInfo);
+      });
       // file download happens automatically in generateMesh()
     } catch (err) {
       const errorMsg =
         err instanceof Error ? err.message : "failed to generate mesh";
       setError(errorMsg);
+      setProgress(null);
       console.error("generation error:", err);
     } finally {
       setIsGenerating(false);
+      // Keep progress visible briefly after completion
+      setTimeout(() => setProgress(null), 2000);
     }
   };
 
@@ -177,6 +185,26 @@ export default function DownloadButton({ bounds }: DownloadButtonProps) {
           </span>
         )}
       </button>
+
+      {/* Progress Bar */}
+      {progress && (
+        <div className="rounded-lg border border-neutral-800 bg-gradient-to-br from-neutral-900/80 to-neutral-900/50 backdrop-blur p-4 space-y-3 animate-in fade-in slide-in-from-top-2 duration-300">
+          <div className="flex items-center justify-between text-xs">
+            <span className="text-neutral-400">{progress.message}</span>
+            <span className="font-mono font-semibold text-neutral-300">
+              {progress.percent}%
+            </span>
+          </div>
+          <div className="relative h-2 w-full overflow-hidden rounded-full bg-neutral-800">
+            <div
+              className="h-full bg-gradient-to-r from-blue-500 to-purple-500 transition-all duration-300 ease-out"
+              style={{ width: `${progress.percent}%` }}
+            >
+              <div className="absolute inset-0 animate-pulse bg-white/20"></div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {error && (
         <div className="rounded-lg border border-red-900/50 bg-red-950/50 backdrop-blur p-4 animate-in fade-in slide-in-from-top-2 duration-300">

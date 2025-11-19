@@ -2,9 +2,10 @@
 Main mesh generation pipeline
 Orchestrates the entire process from bbox to 3D mesh
 """
-from typing import Tuple, Optional, List
+from typing import Tuple, Optional, List, Callable
 import os
 import math
+import time
 import trimesh
 from app.fetchers.mapbox import MapboxTerrainFetcher
 from app.fetchers.overpass import OverpassFetcher
@@ -40,7 +41,8 @@ class MeshGenerator:
         include_buildings: bool = True,
         include_textures: bool = True,
         zoom_level: int = 12,
-        texture_max_dimension: int = 1280
+        texture_max_dimension: int = 1280,
+        progress_callback: Optional[Callable[[int, str], None]] = None
     ) -> Tuple[str, Optional[str], List[str]]:
         """
         Generate mesh for the given bounding box
@@ -54,11 +56,21 @@ class MeshGenerator:
             include_textures: Whether to generate textures (default: True)
             zoom_level: Mapbox zoom level for terrain detail (default: 12)
             texture_max_dimension: Maximum texture dimension in pixels (default: 1280)
+            progress_callback: Optional callback function(percent, message)
         
         Returns:
             Tuple of (obj_file_path, mtl_file_path, texture_file_paths)
         """
-        print("🚀 Starting mesh generation pipeline...\n")
+        start_time = time.time()
+        print("\n" + "="*60)
+        print("🚀 MESH GENERATION PIPELINE STARTED")
+        print("="*60)
+        print(f"📍 Area: {north:.4f}°N, {south:.4f}°S, {east:.4f}°E, {west:.4f}°W")
+        print(f"🎯 Quality: Zoom {zoom_level}, Texture {texture_max_dimension}px")
+        print("="*60 + "\n")
+        
+        if progress_callback:
+            progress_callback(0, "Starting mesh generation...")
         
         # Calculate center for coordinate transformation
         center_lat = (north + south) / 2
@@ -69,7 +81,9 @@ class MeshGenerator:
         # 1. Fetch satellite texture (if textures enabled)
         terrain_texture_path = None
         if include_textures:
-            print("⏳ Fetching satellite imagery from Mapbox...")
+            print("[1/6] 📸 Fetching satellite imagery...")
+            if progress_callback:
+                progress_callback(5, "Fetching satellite imagery...")
             satellite_fetcher = MapboxSatelliteFetcher(self.mapbox_token)
             
             # Calculate aspect ratio of bounding box to fetch correct image dimensions
@@ -103,22 +117,27 @@ class MeshGenerator:
                 )
                 if saved_path:
                     texture_files.append(saved_path)
+                    print(f"      ✅ Saved texture: {width}x{height}px\n")
             except Exception as e:
-                print(f"⚠️  Warning: Failed to fetch satellite imagery: {e}")
-                print("    Continuing without terrain texture...\n")
+                print(f"      ⚠️  Warning: Failed to fetch satellite imagery: {e}")
+                print("      Continuing without terrain texture...\n")
                 terrain_texture_path = None
         
         # 2. Fetch elevation data from Mapbox
-        print(f"⏳ Fetching elevation data from Mapbox (zoom level {zoom_level})...")
+        print(f"[2/6] 🏔️  Fetching elevation data (zoom {zoom_level})...")
+        if progress_callback:
+            progress_callback(15, "Fetching elevation data...")
         # Use smoothing_sigma=1.5 for good balance between noise reduction and feature preservation
         mapbox_fetcher = MapboxTerrainFetcher(self.mapbox_token, smoothing_sigma=1.5)
         elevation_data, elev_metadata = mapbox_fetcher.fetch_elevation(
             north=north, south=south, east=east, west=west, zoom=zoom_level
         )
-        print(f"✅ Fetched elevation: {elevation_data.shape}\n")
+        print(f"      ✅ Elevation grid: {elevation_data.shape[0]}x{elevation_data.shape[1]} points\n")
         
         # 3. Generate terrain mesh with UVs
-        print("⏳ Generating terrain mesh...")
+        print("[3/6] 🗺️  Generating terrain mesh...")
+        if progress_callback:
+            progress_callback(35, "Generating terrain mesh...")
         terrain_gen = TerrainGenerator()
         terrain_mesh = terrain_gen.generate_mesh(
             elevation_data=elevation_data,
@@ -126,9 +145,9 @@ class MeshGenerator:
             resolution=30.0,
             generate_uvs=include_textures
         )
-        print(f"✅ Terrain: {len(terrain_mesh.vertices):,} vertices, {len(terrain_mesh.faces):,} faces")
+        print(f"      ✅ Terrain mesh: {len(terrain_mesh.vertices):,} vertices, {len(terrain_mesh.faces):,} faces")
         if include_textures and hasattr(terrain_mesh.visual, 'uv'):
-            print(f"   UV coordinates: {len(terrain_mesh.visual.uv):,} points\n")
+            print(f"      ✅ UV coordinates: {len(terrain_mesh.visual.uv):,} points\n")
         else:
             print()
         
@@ -137,46 +156,58 @@ class MeshGenerator:
         terrain_centroid_xz = terrain_mesh.centroid.copy()
         terrain_centroid_xz[1] = 0  # Don't center Y - keep real elevations
         terrain_mesh.vertices -= terrain_centroid_xz
-        print(f"   Centered terrain at X-Z origin (offset: X={terrain_centroid_xz[0]:.2f}, Z={terrain_centroid_xz[2]:.2f})\n")
+        print(f"      ℹ️  Centered terrain at origin (X: {terrain_centroid_xz[0]:.1f}m, Z: {terrain_centroid_xz[2]:.1f}m)\n")
         
         meshes_to_merge = [terrain_mesh]
         
         # 4. Fetch and extrude buildings (if requested)
         if include_buildings:
-            print("⏳ Fetching building data from OSM...")
+            print("[4/6] 🏢 Fetching building data from OpenStreetMap...")
+            if progress_callback:
+                progress_callback(55, "Fetching buildings from OSM...")
             overpass_fetcher = OverpassFetcher(timeout=60)
             building_data = overpass_fetcher.fetch_buildings(
                 north=north, south=south, east=east, west=west
             )
-            print(f"✅ Fetched {len(building_data)} buildings\n")
+            print(f"      ✅ Found {len(building_data)} buildings\n")
             
             if building_data:
-                print("⏳ Extruding buildings...")
+                print("[5/6] 🏗️  Extruding buildings...")
+                if progress_callback:
+                    progress_callback(70, f"Extruding {len(building_data)} buildings...")
                 # Pass terrain mesh so buildings can sit on terrain correctly
                 # Don't pass offset - buildings and terrain use same coordinate transformer
                 building_extruder = BuildingExtruder(center_lat, center_lon, terrain_mesh)
                 building_meshes = building_extruder.extrude_buildings(
                     building_data, min_height=3.0
                 )
-                print(f"✅ Extruded {len(building_meshes)} buildings\n")
+                print(f"      ✅ Created {len(building_meshes)} building meshes\n")
                 
                 if building_meshes:
                     meshes_to_merge.extend(building_meshes)
+        else:
+            print("[4-5/6] ⏭️  Skipping buildings...\n")
+            if progress_callback:
+                progress_callback(70, "Skipping buildings...")
         
         # 5. Merge all meshes
-        print("⏳ Merging meshes...")
+        print("[6/6] 🔧 Merging and finalizing mesh...")
+        if progress_callback:
+            progress_callback(85, "Merging meshes...")
         final_mesh = merge_meshes(meshes_to_merge)
         
         # Center the final merged mesh (terrain is already centered, but buildings aren't)
         final_centroid_xz = final_mesh.centroid.copy()
         final_centroid_xz[1] = 0  # Don't center Y
         final_mesh.vertices -= final_centroid_xz
-        print(f"   Final centering offset: X={final_centroid_xz[0]:.2f}, Z={final_centroid_xz[2]:.2f}")
+        print(f"      ℹ️  Final offset: X: {final_centroid_xz[0]:.1f}m, Z: {final_centroid_xz[2]:.1f}m")
         
-        print(f"✅ Final mesh: {len(final_mesh.vertices):,} vertices, {len(final_mesh.faces):,} faces\n")
+        print(f"      ✅ Final mesh: {len(final_mesh.vertices):,} vertices, {len(final_mesh.faces):,} faces\n")
         
         # 6. Export to OBJ with texture reference
-        print("⏳ Exporting to OBJ...")
+        print("💾 Exporting to OBJ format...")
+        if progress_callback:
+            progress_callback(95, "Exporting to OBJ...")
         output_path = os.path.join(self.temp_dir, "scene")
         
         # If we have a terrain texture, set it in the mesh visual
@@ -206,7 +237,6 @@ class MeshGenerator:
                 )
         
         obj_path = export_obj(final_mesh, output_path, include_normals=True)
-        print(f"✅ Exported to: {obj_path}\n")
         
         # MTL file path (trimesh creates it as material.mtl in the same directory)
         obj_dir = os.path.dirname(obj_path)
@@ -216,6 +246,22 @@ class MeshGenerator:
             mtl_path = os.path.join(obj_dir, "scene.mtl")
         if not os.path.exists(mtl_path):
             mtl_path = None
+        
+        elapsed = time.time() - start_time
+        
+        print(f"      ✅ Exported: {os.path.basename(obj_path)}")
+        if mtl_path:
+            print(f"      ✅ Material: {os.path.basename(mtl_path)}")
+        if texture_files:
+            for tex in texture_files:
+                print(f"      ✅ Texture: {os.path.basename(tex)}")
+        
+        print("\n" + "="*60)
+        print(f"✨ GENERATION COMPLETE IN {elapsed:.1f}s")
+        print("="*60 + "\n")
+        
+        if progress_callback:
+            progress_callback(100, "Complete!")
         
         return obj_path, mtl_path, texture_files
 

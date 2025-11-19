@@ -6,11 +6,12 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
-from typing import Optional
+from typing import Optional, Dict
 from enum import Enum
 import os
 import math
 import zipfile
+import uuid
 from pathlib import Path
 from dotenv import load_dotenv
 from app.generator import MeshGenerator
@@ -36,6 +37,9 @@ app.add_middleware(
 # Ensure temp directory exists
 TEMP_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "temp")
 os.makedirs(TEMP_DIR, exist_ok=True)
+
+# In-memory progress store (use Redis in production)
+progress_store: Dict[str, Dict[str, any]] = {}
 
 
 class MeshQuality(str, Enum):
@@ -138,6 +142,10 @@ class GenerateRequest(BaseModel):
         default=MeshQuality.MEDIUM,
         description="Mesh detail quality level"
     )
+    job_id: Optional[str] = Field(
+        default=None,
+        description="Optional job ID for progress tracking"
+    )
 
 
 @app.get("/quality-options")
@@ -160,6 +168,23 @@ async def get_quality_options():
         ],
         "default": MeshQuality.MEDIUM.value
     }
+
+
+@app.get("/progress/{job_id}")
+async def get_progress(job_id: str):
+    """
+    Get progress for a generation job
+    
+    Args:
+        job_id: Job identifier
+    
+    Returns:
+        Progress information (percent, message, status)
+    """
+    if job_id not in progress_store:
+        raise HTTPException(status_code=404, detail="Job not found")
+    
+    return progress_store[job_id]
 
 
 @app.post("/generate")
@@ -188,6 +213,24 @@ async def generate_mesh(request: GenerateRequest):
                 detail="MAPBOX_ACCESS_TOKEN not configured"
             )
         
+        # Create or use provided job ID
+        job_id = request.job_id or str(uuid.uuid4())
+        
+        # Initialize progress
+        progress_store[job_id] = {
+            "percent": 0,
+            "message": "Starting...",
+            "status": "processing"
+        }
+        
+        # Progress callback
+        def update_progress(percent: int, message: str):
+            progress_store[job_id] = {
+                "percent": percent,
+                "message": message,
+                "status": "processing"
+            }
+        
         # Generate mesh with quality settings
         generator = MeshGenerator(TEMP_DIR, mapbox_token)
         obj_path, mtl_path, texture_files = generator.generate(
@@ -198,7 +241,8 @@ async def generate_mesh(request: GenerateRequest):
             include_buildings=True,
             include_textures=True,
             zoom_level=quality_config["zoom"],
-            texture_max_dimension=quality_config["texture_max"]
+            texture_max_dimension=quality_config["texture_max"],
+            progress_callback=update_progress
         )
         
         # Verify OBJ file exists
@@ -229,6 +273,13 @@ async def generate_mesh(request: GenerateRequest):
                 # Add file with just its basename (no directory structure)
                 zipf.write(file_path, arcname=os.path.basename(file_path))
         
+        # Mark as complete
+        progress_store[job_id] = {
+            "percent": 100,
+            "message": "Complete!",
+            "status": "complete"
+        }
+        
         # Return ZIP file
         return FileResponse(
             path=zip_path,
@@ -237,8 +288,20 @@ async def generate_mesh(request: GenerateRequest):
         )
         
     except ValueError as e:
+        if request.job_id:
+            progress_store[request.job_id] = {
+                "percent": 0,
+                "message": str(e),
+                "status": "error"
+            }
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
+        if request.job_id:
+            progress_store[request.job_id] = {
+                "percent": 0,
+                "message": f"Error: {str(e)}",
+                "status": "error"
+            }
         raise HTTPException(status_code=500, detail=f"Internal error: {str(e)}")
 
 

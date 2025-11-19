@@ -58,42 +58,96 @@ export async function getQualityOptions(): Promise<QualityOptionsResponse> {
   return response.json();
 }
 
+export interface ProgressInfo {
+  percent: number;
+  message: string;
+  status: "processing" | "complete" | "error";
+}
+
 /**
- * Generate mesh for the given bounding box and trigger download
- * Returns a ZIP file containing .obj, .mtl, and texture .png files
+ * Get progress for a job
+ */
+export async function getProgress(jobId: string): Promise<ProgressInfo> {
+  const response = await fetch(`${API_URL}/progress/${jobId}`);
+  
+  if (!response.ok) {
+    throw new Error("Failed to fetch progress");
+  }
+  
+  return response.json();
+}
+
+/**
+ * Generate mesh for the given bounding box with progress tracking
+ * Calls onProgress callback with updates, then triggers download when complete
  */
 export async function generateMesh(
   bbox: BoundingBox, 
-  quality: MeshQuality = "medium"
+  quality: MeshQuality = "medium",
+  onProgress?: (progress: ProgressInfo) => void
 ): Promise<void> {
-  const response = await fetch(`${API_URL}/generate`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ bbox, quality }),
-  });
-
-  if (!response.ok) {
-    const error = await response.json().catch(() => ({ detail: "Failed to generate mesh" }));
-    throw new Error(error.detail || "Failed to generate mesh");
+  // Generate a job ID for progress tracking
+  const jobId = Math.random().toString(36).substring(7);
+  
+  // Start polling for progress if callback provided
+  let pollInterval: NodeJS.Timeout | null = null;
+  if (onProgress) {
+    pollInterval = setInterval(async () => {
+      try {
+        const progress = await getProgress(jobId);
+        onProgress(progress);
+        
+        // Stop polling when complete or error
+        if (progress.status === "complete" || progress.status === "error") {
+          if (pollInterval) clearInterval(pollInterval);
+        }
+      } catch (err) {
+        // Silently fail progress updates, generation continues
+        console.warn("Progress update failed:", err);
+      }
+    }, 500); // Poll every 500ms
   }
+  
+  try {
+    const response = await fetch(`${API_URL}/generate`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ bbox, quality, job_id: jobId }),
+    });
 
-  // Get filename from response headers or use default
-  const contentDisposition = response.headers.get("content-disposition");
-  const filenameMatch = contentDisposition?.match(/filename="?(.+)"?/i);
-  const filename = filenameMatch ? filenameMatch[1] : "tark.zip";
+    if (pollInterval) clearInterval(pollInterval);
 
-  // Download file
-  const blob = await response.blob();
-  const url = window.URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = filename;
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
-  window.URL.revokeObjectURL(url);
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ detail: "Failed to generate mesh" }));
+      throw new Error(error.detail || "Failed to generate mesh");
+    }
+
+    // Get filename from response headers or use default
+    const contentDisposition = response.headers.get("content-disposition");
+    const filenameMatch = contentDisposition?.match(/filename="?(.+)"?/i);
+    const filename = filenameMatch ? filenameMatch[1] : "tark.zip";
+
+    // Download file
+    const blob = await response.blob();
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(url);
+    
+    // Final progress update
+    if (onProgress) {
+      onProgress({ percent: 100, message: "Download complete!", status: "complete" });
+    }
+  } catch (error) {
+    if (pollInterval) clearInterval(pollInterval);
+    throw error;
+  }
 }
 
 /**
