@@ -129,6 +129,13 @@ class MeshGenerator:
         else:
             print()
         
+        # Center terrain X and Z BEFORE buildings sample elevations
+        # This ensures buildings and terrain are in the same coordinate space
+        terrain_centroid_xz = terrain_mesh.centroid.copy()
+        terrain_centroid_xz[1] = 0  # Don't center Y - keep real elevations
+        terrain_mesh.vertices -= terrain_centroid_xz
+        print(f"   Centered terrain at X-Z origin (offset: X={terrain_centroid_xz[0]:.2f}, Z={terrain_centroid_xz[2]:.2f})\n")
+        
         meshes_to_merge = [terrain_mesh]
         
         # 4. Fetch and extrude buildings (if requested)
@@ -142,7 +149,8 @@ class MeshGenerator:
             
             if building_data:
                 print("⏳ Extruding buildings...")
-                # Pass terrain mesh so buildings can sit on terrain
+                # Pass terrain mesh so buildings can sit on terrain correctly
+                # Don't pass offset - buildings and terrain use same coordinate transformer
                 building_extruder = BuildingExtruder(center_lat, center_lon, terrain_mesh)
                 building_meshes = building_extruder.extrude_buildings(
                     building_data, min_height=3.0
@@ -156,10 +164,11 @@ class MeshGenerator:
         print("⏳ Merging meshes...")
         final_mesh = merge_meshes(meshes_to_merge)
         
-        # Center X and Z at origin, but preserve Y elevations (Y-up coordinate system)
-        centroid_xz = final_mesh.centroid.copy()
-        centroid_xz[1] = 0  # Don't center Y - keep real elevations
-        final_mesh.vertices -= centroid_xz
+        # Center the final merged mesh (terrain is already centered, but buildings aren't)
+        final_centroid_xz = final_mesh.centroid.copy()
+        final_centroid_xz[1] = 0  # Don't center Y
+        final_mesh.vertices -= final_centroid_xz
+        print(f"   Final centering offset: X={final_centroid_xz[0]:.2f}, Z={final_centroid_xz[2]:.2f}")
         
         print(f"✅ Final mesh: {len(final_mesh.vertices):,} vertices, {len(final_mesh.faces):,} faces\n")
         
