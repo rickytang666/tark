@@ -105,6 +105,25 @@ backend/
 └── temp/                     # Temporary file storage
 ```
 
+## Using in Blender
+
+**Download:** The API returns a ZIP file (`geomesh.zip`) containing all necessary files.
+
+**Extract and Import:**
+
+1. Extract the ZIP file to a folder
+2. Drag only the `.obj` file into Blender
+3. Textures load automatically
+
+**Files in ZIP:**
+
+- `scene.obj` - 3D mesh geometry
+- `material.mtl` - Material definitions
+- `material_0.png` - Satellite texture for terrain
+- `terrain.png` - Original satellite image (optional)
+
+All files must be in the same folder for textures to load properly.
+
 ## status
 
 ### completed

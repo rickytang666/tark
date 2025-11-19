@@ -33,6 +33,7 @@ export async function checkHealth(): Promise<boolean> {
 
 /**
  * Generate mesh for the given bounding box and trigger download
+ * Returns a ZIP file containing .obj, .mtl, and texture .png files
  */
 export async function generateMesh(bbox: BoundingBox): Promise<void> {
   const response = await fetch(`${API_URL}/generate`, {
@@ -51,7 +52,7 @@ export async function generateMesh(bbox: BoundingBox): Promise<void> {
   // Get filename from response headers or use default
   const contentDisposition = response.headers.get("content-disposition");
   const filenameMatch = contentDisposition?.match(/filename="?(.+)"?/i);
-  const filename = filenameMatch ? filenameMatch[1] : "tark.obj";
+  const filename = filenameMatch ? filenameMatch[1] : "tark.zip";
 
   // Download file
   const blob = await response.blob();

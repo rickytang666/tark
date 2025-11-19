@@ -1,6 +1,14 @@
 """
 Coordinate transformation utilities
 Converts between WGS84 and local tangent plane coordinates
+
+Coordinate System Standard (Unity/Blender Convention):
+- X axis: East-West (positive = west, negative = east)
+- Y axis: Elevation/Up-Down (positive = up)
+- Z axis: North-South (positive = south, negative = north)
+
+Note: X and Z are negated from UTM to match Unity/Blender bird's eye view orientation.
+This Y-up, left-handed system is standard for Unity and Blender.
 """
 import pyproj
 from typing import Tuple
@@ -67,7 +75,10 @@ class CoordinateTransformer:
             lon: Longitude
         
         Returns:
-            (x, y) in meters from center
+            (x, z) in meters from center
+            x = east-west position
+            z = north-south position
+            (Note: Y-axis is reserved for elevation in 3D meshes)
         """
         x, y = self.transformer.transform(lon, lat)
         # Subtract center to get relative coordinates
@@ -86,7 +97,10 @@ class CoordinateTransformer:
             lons: Array of longitudes
         
         Returns:
-            (x_array, y_array) in meters from center
+            (x_array, z_array) in meters from center
+            x = east-west positions
+            z = north-south positions
+            (Note: Y-axis is reserved for elevation in 3D meshes)
         """
         xs, ys = self.transformer.transform(lons, lats)
         # Subtract center to get relative coordinates

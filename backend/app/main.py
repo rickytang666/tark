@@ -9,6 +9,8 @@ from pydantic import BaseModel, Field
 from typing import Optional
 import os
 import math
+import zipfile
+from pathlib import Path
 from dotenv import load_dotenv
 from app.generator import MeshGenerator
 
@@ -104,7 +106,7 @@ async def generate_mesh(bbox: BoundingBox):
         bbox: Geographic bounding box (north, south, east, west)
     
     Returns:
-        File stream with .obj mesh
+        ZIP file containing .obj, .mtl, and texture .png files
     """
     try:
         # Validate bounding box
@@ -120,22 +122,48 @@ async def generate_mesh(bbox: BoundingBox):
         
         # Generate mesh
         generator = MeshGenerator(TEMP_DIR, mapbox_token)
-        obj_path, mtl_path = generator.generate(
+        obj_path, mtl_path, texture_files = generator.generate(
             north=bbox.north,
             south=bbox.south,
             east=bbox.east,
             west=bbox.west,
-            include_buildings=True
+            include_buildings=True,
+            include_textures=True
         )
         
-        # Return OBJ file
+        # Verify OBJ file exists
         if not os.path.exists(obj_path):
             raise HTTPException(status_code=500, detail="Generated file not found")
         
+        # Collect all files to include in ZIP
+        files_to_zip = [obj_path]
+        
+        if mtl_path and os.path.exists(mtl_path):
+            files_to_zip.append(mtl_path)
+        
+        # Add texture files
+        for texture_path in texture_files:
+            if os.path.exists(texture_path):
+                files_to_zip.append(texture_path)
+        
+        # Check for material_0.png (created by trimesh)
+        obj_dir = os.path.dirname(obj_path)
+        material_png = os.path.join(obj_dir, "material_0.png")
+        if os.path.exists(material_png) and material_png not in files_to_zip:
+            files_to_zip.append(material_png)
+        
+        # Create ZIP file
+        zip_path = os.path.join(TEMP_DIR, "geomesh.zip")
+        with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
+            for file_path in files_to_zip:
+                # Add file with just its basename (no directory structure)
+                zipf.write(file_path, arcname=os.path.basename(file_path))
+        
+        # Return ZIP file
         return FileResponse(
-            path=obj_path,
-            media_type="application/octet-stream",
-            filename="tark.obj"
+            path=zip_path,
+            media_type="application/zip",
+            filename="tark.zip"
         )
         
     except ValueError as e:

@@ -77,6 +77,10 @@ tark/
 - bbox: 1-5km (min 1km to prevent distortion)
 - scale: 1 obj unit = 1 meter
 - coords: wgs84 → utm → local tangent plane
-- output: obj + mtl
+- output: obj + mtl + texture png
+
+## using in blender
+
+Download returns a ZIP file with all files (obj, mtl, png). Extract the ZIP and drag the `.obj` file into Blender - textures load automatically.
 
 see [backend/STANDARDS.md](backend/STANDARDS.md)
