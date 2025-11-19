@@ -6,100 +6,73 @@
 
 ---
 
-## What It Does
+## What you get
 
-Tark generates 3D meshes from real-world geographic data:
+Draw a box on the map, download a .zip with:
 
-- **Terrain**: Elevation data from Mapbox Terrain-RGB (30m resolution)
-- **Buildings**: Footprints from OpenStreetMap, extruded to realistic heights
-- **Textures**: Satellite imagery automatically mapped to terrain
-- **Scale**: 1:1 metric scale (1 unit = 1 meter)
+- Terrain mesh (30m resolution elevation from Mapbox)
+- Buildings (from OpenStreetMap, extruded to real heights)
+- Satellite texture mapped on the terrain
+- 1:1 scale (1 unit = 1 meter)
 
-Perfect for game prototyping, urban planning visualization, or creating realistic environments based on actual locations.
+## How to use it
 
-## How It Works
+1. Go to localhost:3000
+2. Shift+drag to select an area (1-5km works best)
+3. Pick quality level
+4. Hit generate
+5. Drag the .obj into Unity/Unreal/Blender
 
-1. **Select Area**: Draw a rectangle on the map (1-5km per side)
-2. **Generate**: Backend fetches elevation data and building footprints
-3. **Process**: Generates terrain mesh, extrudes buildings, applies textures
-4. **Download**: Get a .zip with .obj, .mtl, and texture files
-5. **Import**: Drag the .obj into your game engine
+Takes 30-120 seconds depending on area size.
 
-The entire process takes 30-120 seconds depending on area size.
+## Stack
 
-## Tech Stack
+- Next.js + Leaflet (frontend map picker)
+- FastAPI + Trimesh (backend mesh generation)
+- Mapbox Terrain-RGB (elevation)
+- OpenStreetMap Overpass (buildings)
+- Mapbox Static (satellite texture)
 
-**Frontend:**
+## Setup
 
-- Next.js +Tailwind CSS
-- Leaflet for map selection
-
-**Backend:**
-
-- FastAPI
-- Trimesh for mesh generation
-- NumPy + SciPy for terrain processing
-- PyProj for coordinate transformations
-
-**Data Sources:**
-
-- Mapbox Terrain-RGB API (elevation data)
-- OpenStreetMap via Overpass API (buildings)
-- Mapbox Static API (satellite imagery)
-
-## Quick Start
-
-### Prerequisites
+You need:
 
 - Python 3.11+
 - Node.js 18+
-- Mapbox API token (get free tier: https://account.mapbox.com/access-tokens/)
+- Mapbox API token (free tier at https://account.mapbox.com/access-tokens/)
 
-### Backend Setup
+**Backend:**
 
 ```bash
 cd backend
 ./setup.sh
-# edit .env and add your MAPBOX_ACCESS_TOKEN
+# add MAPBOX_ACCESS_TOKEN to .env
 source venv/bin/activate
-python -m app.main
+python -m app.main  # runs on :8000
 ```
 
-backend runs at `http://localhost:8000`
-
-### Frontend Setup
+**Frontend:**
 
 ```bash
 cd frontend
 npm install
-npm run dev
+npm run dev  # runs on :3000
 ```
 
-frontend runs at `http://localhost:3000`
+Open localhost:3000, shift+drag on the map, hit generate.
 
-### Using the App
+## Unity import
 
-1. Open `http://localhost:3000`
-2. Hold Shift + drag to select an area (1-5km recommended)
-3. Choose quality level (medium is default)
-4. Click "Generate Mesh"
-5. Download the .zip file
+⚠️ Optimized for Unity. Blender/Unreal work but are experimental.
 
-## Importing to Unity
+1. Extract the .zip
+2. Drag .obj into Unity Assets
+3. Done (textures load automatically, scale is 1:1)
 
-⚠️ **Currently optimized for Unity. Blender/Unreal support is experimental.**
+See `docs/unity.md` for details.
 
-1. Extract the downloaded .zip file
-2. Drag the `.obj` file into Unity's Assets folder
-3. Textures load automatically
-4. Scale is already correct (1 unit = 1 meter)
+## Limits
 
-See `docs/unity.md` for detailed import guide.
-
-## Area Guidelines
-
-- **Minimum**: 1km × 1km (prevents terrain distortion)
-- **Recommended**: 2km × 2km (best balance of detail and performance)
-- **Maximum**: 5km × 5km (prevents timeout/memory issues)
-
-Smaller areas may have unrealistic vertical exaggeration due to Mapbox tile behavior.
+- Min: 1km × 1km (smaller = weird terrain stretching)
+- Sweet spot: 2km × 2km
+- Max: 5km × 5km (bigger = timeout/OOM)
