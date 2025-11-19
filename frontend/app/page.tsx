@@ -37,7 +37,10 @@ export default function Home() {
             </h1>
           </div>
           <p className="text-base text-neutral-400 mb-2">
-            turn locations into 3d meshes for games
+            Google Earth for game developers
+          </p>
+          <p className="text-sm text-neutral-500">
+            real terrain · real buildings · game-ready in seconds
           </p>
           <div className="inline-flex items-center gap-2 mt-3 px-3 py-1.5 rounded-full bg-neutral-900/50 border border-neutral-800">
             <kbd className="px-1.5 py-0.5 text-xs font-mono bg-neutral-800 rounded">

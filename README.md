@@ -1,7 +1,7 @@
 <div align="center">
     <h1>Tark</h1>
-    <p>Turn any real-world location into a game-ready 3D mesh.</p>
-    <p>Select any area on a map, get terrain + buildings as a textured .obj file. Drop it into Unity, Unreal, or Blender.</p>
+    <p><strong>Google Earth for game developers.</strong></p>
+    <p>Click anywhere on the map. Get a game-ready 3D mesh in 20 seconds. Real terrain, real buildings, real textures.</p>
 </div>
 
 ---
