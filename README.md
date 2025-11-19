@@ -1,24 +1,73 @@
-# Tark
+<div align="center">
+    <h1>Tark</h1>
+    <p>Turn any real-world location into a game-ready 3D mesh.</p>
+    <p>Select any area on a map, get terrain + buildings as a textured .obj file. Drop it into Unity, Unreal, or Blender.</p>
+</div>
 
-turn any location into a game-ready 3d mesh. select an area, get terrain + buildings as .obj file for unity/unreal/blender.
+---
 
-**stack:** next.js 15 + fastapi + mapbox terrain-rgb + openstreetmap
+## What It Does
 
-## quick start
+Tark generates 3D meshes from real-world geographic data:
 
-### backend
+- **Terrain**: Elevation data from Mapbox Terrain-RGB (30m resolution)
+- **Buildings**: Footprints from OpenStreetMap, extruded to realistic heights
+- **Textures**: Satellite imagery automatically mapped to terrain
+- **Scale**: 1:1 metric scale (1 unit = 1 meter)
+
+Perfect for game prototyping, urban planning visualization, or creating realistic environments based on actual locations.
+
+## How It Works
+
+1. **Select Area**: Draw a rectangle on the map (1-5km per side)
+2. **Generate**: Backend fetches elevation data and building footprints
+3. **Process**: Generates terrain mesh, extrudes buildings, applies textures
+4. **Download**: Get a .zip with .obj, .mtl, and texture files
+5. **Import**: Drag the .obj into your game engine
+
+The entire process takes 30-120 seconds depending on area size.
+
+## Tech Stack
+
+**Frontend:**
+
+- Next.js +Tailwind CSS
+- Leaflet for map selection
+
+**Backend:**
+
+- FastAPI
+- Trimesh for mesh generation
+- NumPy + SciPy for terrain processing
+- PyProj for coordinate transformations
+
+**Data Sources:**
+
+- Mapbox Terrain-RGB API (elevation data)
+- OpenStreetMap via Overpass API (buildings)
+- Mapbox Static API (satellite imagery)
+
+## Quick Start
+
+### Prerequisites
+
+- Python 3.11+
+- Node.js 18+
+- Mapbox API token (get free tier: https://account.mapbox.com/access-tokens/)
+
+### Backend Setup
 
 ```bash
 cd backend
 ./setup.sh
-# add MAPBOX_ACCESS_TOKEN to .env
+# edit .env and add your MAPBOX_ACCESS_TOKEN
 source venv/bin/activate
 python -m app.main
 ```
 
-runs at `http://localhost:8000`
+backend runs at `http://localhost:8000`
 
-### frontend
+### Frontend Setup
 
 ```bash
 cd frontend
@@ -26,37 +75,31 @@ npm install
 npm run dev
 ```
 
-runs at `http://localhost:3000`
+frontend runs at `http://localhost:3000`
 
-## specs
+### Using the App
 
-- **area:** 1-5km per side (min 1km to prevent distortion)
-- **scale:** 1 obj unit = 1 meter
-- **coords:** wgs84 → utm → local tangent plane
-- **output:** obj + mtl + satellite texture png
-- **terrain resolution:** ~30m at zoom 12
-- **buildings:** osm data with height estimation
+1. Open `http://localhost:3000`
+2. Hold Shift + drag to select an area (1-5km recommended)
+3. Choose quality level (medium is default)
+4. Click "Generate Mesh"
+5. Download the .zip file
 
-## using the mesh
+## Importing to Unity
 
-download returns a zip file. extract and drag the `.obj` file into blender/unity - textures load automatically.
+⚠️ **Currently optimized for Unity. Blender/Unreal support is experimental.**
 
-see `docs/unity.md` for unity import guide.
+1. Extract the downloaded .zip file
+2. Drag the `.obj` file into Unity's Assets folder
+3. Textures load automatically
+4. Scale is already correct (1 unit = 1 meter)
 
-## project structure
+See `docs/unity.md` for detailed import guide.
 
-```
-tark/
-├── frontend/       # next.js interface
-├── backend/        # fastapi mesh generator
-└── docs/           # documentation
-```
+## Area Guidelines
 
-## technical details
+- **Minimum**: 1km × 1km (prevents terrain distortion)
+- **Recommended**: 2km × 2km (best balance of detail and performance)
+- **Maximum**: 5km × 5km (prevents timeout/memory issues)
 
-- coordinate system: y-up, right-handed
-- terrain: gaussian smoothing (σ=1.5) to reduce mapbox tile noise
-- buildings: elevation-aware placement on terrain
-- textures: satellite imagery with planar uv projection
-
-see `backend/docs/` for implementation details.
+Smaller areas may have unrealistic vertical exaggeration due to Mapbox tile behavior.
