@@ -11,6 +11,20 @@ export interface BoundingBox {
   west: number;
 }
 
+export type MeshQuality = "low" | "medium" | "high" | "ultra";
+
+export interface QualityOption {
+  value: MeshQuality;
+  label: string;
+  zoom: number;
+  description: string;
+}
+
+export interface QualityOptionsResponse {
+  options: QualityOption[];
+  default: MeshQuality;
+}
+
 export interface GenerateResponse {
   message?: string;
   bbox?: BoundingBox;
@@ -32,16 +46,32 @@ export async function checkHealth(): Promise<boolean> {
 }
 
 /**
+ * Get available quality options from backend
+ */
+export async function getQualityOptions(): Promise<QualityOptionsResponse> {
+  const response = await fetch(`${API_URL}/quality-options`);
+  
+  if (!response.ok) {
+    throw new Error("Failed to fetch quality options");
+  }
+  
+  return response.json();
+}
+
+/**
  * Generate mesh for the given bounding box and trigger download
  * Returns a ZIP file containing .obj, .mtl, and texture .png files
  */
-export async function generateMesh(bbox: BoundingBox): Promise<void> {
+export async function generateMesh(
+  bbox: BoundingBox, 
+  quality: MeshQuality = "medium"
+): Promise<void> {
   const response = await fetch(`${API_URL}/generate`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
     },
-    body: JSON.stringify(bbox),
+    body: JSON.stringify({ bbox, quality }),
   });
 
   if (!response.ok) {

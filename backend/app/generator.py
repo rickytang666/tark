@@ -38,7 +38,9 @@ class MeshGenerator:
         east: float,
         west: float,
         include_buildings: bool = True,
-        include_textures: bool = True
+        include_textures: bool = True,
+        zoom_level: int = 12,
+        texture_max_dimension: int = 1280
     ) -> Tuple[str, Optional[str], List[str]]:
         """
         Generate mesh for the given bounding box
@@ -50,6 +52,8 @@ class MeshGenerator:
             west: West longitude
             include_buildings: Whether to include buildings (default: True)
             include_textures: Whether to generate textures (default: True)
+            zoom_level: Mapbox zoom level for terrain detail (default: 12)
+            texture_max_dimension: Maximum texture dimension in pixels (default: 1280)
         
         Returns:
             Tuple of (obj_file_path, mtl_file_path, texture_file_paths)
@@ -80,16 +84,15 @@ class MeshGenerator:
             # Calculate aspect ratio
             aspect_ratio = lon_meters / lat_meters if lat_meters > 0 else 1.0
             
-            # Calculate image dimensions maintaining aspect ratio (max 1280x1280)
-            max_dimension = 1280
+            # Calculate image dimensions maintaining aspect ratio
             if aspect_ratio >= 1.0:
                 # Wider than tall
-                width = max_dimension
-                height = int(max_dimension / aspect_ratio)
+                width = texture_max_dimension
+                height = int(texture_max_dimension / aspect_ratio)
             else:
                 # Taller than wide
-                height = max_dimension
-                width = int(max_dimension * aspect_ratio)
+                height = texture_max_dimension
+                width = int(texture_max_dimension * aspect_ratio)
             
             terrain_texture_path = os.path.join(self.temp_dir, "terrain.png")
             try:
@@ -106,11 +109,11 @@ class MeshGenerator:
                 terrain_texture_path = None
         
         # 2. Fetch elevation data from Mapbox
-        print("⏳ Fetching elevation data from Mapbox...")
+        print(f"⏳ Fetching elevation data from Mapbox (zoom level {zoom_level})...")
         # Use smoothing_sigma=1.5 for good balance between noise reduction and feature preservation
         mapbox_fetcher = MapboxTerrainFetcher(self.mapbox_token, smoothing_sigma=1.5)
         elevation_data, elev_metadata = mapbox_fetcher.fetch_elevation(
-            north=north, south=south, east=east, west=west, zoom=12
+            north=north, south=south, east=east, west=west, zoom=zoom_level
         )
         print(f"✅ Fetched elevation: {elevation_data.shape}\n")
         
