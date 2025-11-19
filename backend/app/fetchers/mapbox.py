@@ -8,6 +8,7 @@ from PIL import Image
 from io import BytesIO
 from typing import Tuple, List
 import math
+from scipy.ndimage import gaussian_filter
 
 
 class MapboxTerrainFetcher:
@@ -15,16 +16,18 @@ class MapboxTerrainFetcher:
     Fetches elevation data from Mapbox Terrain-RGB API
     """
     
-    def __init__(self, access_token: str):
+    def __init__(self, access_token: str, smoothing_sigma: float = 1.0):
         """
         Initialize Mapbox fetcher
         
         Args:
             access_token: Mapbox API access token
+            smoothing_sigma: Gaussian smoothing sigma (0 = no smoothing, 1-2 = light, 3-5 = heavy)
         """
         self.access_token = access_token
         self.base_url = "https://api.mapbox.com/v4/mapbox.terrain-rgb"
         self.tile_size = 512  # Mapbox tiles are 512x512 pixels
+        self.smoothing_sigma = smoothing_sigma
     
     def fetch_elevation(
         self,
@@ -75,6 +78,10 @@ class MapboxTerrainFetcher:
         
         # 4. Decode RGB to elevation
         elevation_array = self._decode_terrain_rgb(stitched_image)
+        
+        # 4.5. Apply smoothing to reduce noise and tile seams
+        if self.smoothing_sigma > 0:
+            elevation_array = self._smooth_elevation(elevation_array)
         
         # 5. Crop to exact bounding box
         elevation_cropped, crop_bounds = self._crop_to_bbox(
@@ -223,4 +230,28 @@ class MapboxTerrainFetcher:
         
         elevation = -10000 + ((r * 256 * 256 + g * 256 + b) * 0.1)
         return elevation
+    
+    def _smooth_elevation(self, elevation: np.ndarray) -> np.ndarray:
+        """
+        Apply Gaussian smoothing to elevation data to reduce noise and tile seams
+        
+        This removes:
+        - RGB encoding quantization artifacts
+        - Tile boundary discontinuities
+        - High-frequency noise from compression
+        
+        Args:
+            elevation: 2D numpy array of elevation values
+        
+        Returns:
+            Smoothed elevation array
+        """
+        # Apply Gaussian filter
+        # Sigma controls smoothing strength:
+        #   0.5-1.0 = light smoothing (removes noise, preserves features)
+        #   1.0-2.0 = medium smoothing (good for urban/suburban areas)
+        #   2.0-5.0 = heavy smoothing (flattens terrain significantly)
+        smoothed = gaussian_filter(elevation, sigma=self.smoothing_sigma, mode='reflect')
+        
+        return smoothed
 

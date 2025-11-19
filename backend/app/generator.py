@@ -107,7 +107,8 @@ class MeshGenerator:
         
         # 2. Fetch elevation data from Mapbox
         print("⏳ Fetching elevation data from Mapbox...")
-        mapbox_fetcher = MapboxTerrainFetcher(self.mapbox_token)
+        # Use smoothing_sigma=1.5 for good balance between noise reduction and feature preservation
+        mapbox_fetcher = MapboxTerrainFetcher(self.mapbox_token, smoothing_sigma=1.5)
         elevation_data, elev_metadata = mapbox_fetcher.fetch_elevation(
             north=north, south=south, east=east, west=west, zoom=12
         )
