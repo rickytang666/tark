@@ -2,7 +2,7 @@
 
 turn any location into a game-ready 3d mesh. select an area, get terrain + buildings as .obj file for unity/unreal/blender.
 
-**stack:** next.js 16 + fastapi + mapbox terrain-rgb + openstreetmap
+**stack:** next.js 15 + fastapi + mapbox terrain-rgb + openstreetmap
 
 ## quick start
 
@@ -28,59 +28,35 @@ npm run dev
 
 runs at `http://localhost:3000`
 
-## progress
+## specs
 
-**days 1-4: backend** ✅
+- **area:** 1-5km per side (min 1km to prevent distortion)
+- **scale:** 1 obj unit = 1 meter
+- **coords:** wgs84 → utm → local tangent plane
+- **output:** obj + mtl + satellite texture png
+- **terrain resolution:** ~30m at zoom 12
+- **buildings:** osm data with height estimation
 
-- mapbox terrain fetcher (multi-tile stitching)
-- overpass api building fetcher
-- terrain mesh generation (130k+ vertices)
-- building extrusion with triangulation
-- full pipeline: bbox → terrain + buildings → obj
+## using the mesh
 
-**days 5-6: frontend setup** ✅
+download returns a zip file. extract and drag the `.obj` file into blender/unity - textures load automatically.
 
-- next.js 16 + typescript + tailwind
-- api client
-- landing page
+see `docs/unity.md` for unity import guide.
 
-**days 5-6: frontend core** 🚧
-
-- [ ] leaflet map integration
-- [ ] rectangle selection tool
-- [ ] area preview ui
-- [ ] validation feedback
-
-**days 7-8: integration**
-
-- connect frontend to backend
-- file downloads
-- loading states
-
-**days 9-10: polish**
-
-- test real locations
-- verify in unity/unreal
-- bug fixes
-
-## structure
+## project structure
 
 ```
 tark/
 ├── frontend/       # next.js interface
 ├── backend/        # fastapi mesh generator
-└── plan/           # design docs
+└── docs/           # documentation
 ```
 
-## specs
+## technical details
 
-- bbox: 1-5km (min 1km to prevent distortion)
-- scale: 1 obj unit = 1 meter
-- coords: wgs84 → utm → local tangent plane
-- output: obj + mtl + texture png
+- coordinate system: y-up, right-handed
+- terrain: gaussian smoothing (σ=1.5) to reduce mapbox tile noise
+- buildings: elevation-aware placement on terrain
+- textures: satellite imagery with planar uv projection
 
-## using in blender
-
-Download returns a ZIP file with all files (obj, mtl, png). Extract the ZIP and drag the `.obj` file into Blender - textures load automatically.
-
-see [backend/STANDARDS.md](backend/STANDARDS.md)
+see `backend/docs/` for implementation details.

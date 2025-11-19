@@ -1,162 +1,111 @@
-# Tark Backend
+# tark backend
 
-FastAPI backend for generating game-ready 3D meshes from real-world locations.
+fastapi backend for generating game-ready 3d meshes from real-world locations.
 
-## Setup
-
-### Quick Setup
+## setup
 
 ```bash
 ./setup.sh
 ```
 
-Then edit `.env` and add your Mapbox token from https://account.mapbox.com/access-tokens/
+edit `.env` and add your mapbox token from https://account.mapbox.com/access-tokens/
 
-### Manual Setup
-
-```bash
-python3 -m venv venv
-source venv/bin/activate
-pip install -r requirements.txt
-cp .env.example .env
-# Edit .env and add your MAPBOX_ACCESS_TOKEN
-```
-
-### Run Server
+## run
 
 ```bash
 source venv/bin/activate
 python -m app.main
 ```
 
-Server runs at `http://localhost:8000`
+server runs at `http://localhost:8000`
 
-## Testing
+api docs at `http://localhost:8000/docs`
 
-### Test Mapbox Terrain Fetcher
+## testing
 
 ```bash
+# test terrain fetcher
 python tests/test_mapbox.py
-```
 
-Fetches elevation data for uwaterloo area. Expected: ~131k elevation points, 2 tiles.
-
-### Test Overpass Building Fetcher
-
-```bash
+# test building fetcher
 python tests/test_overpass.py
-```
 
-Fetches building footprints from OSM. Expected: ~1000 buildings with height/type metadata.
-
-### Test Terrain Mesh Generation
-
-```bash
-python tests/test_terrain.py
-```
-
-Generates 3D terrain mesh from elevation data. Expected: 131k vertices, 260k triangles. Exports to `temp/test_terrain.obj`.
-
-### Test Building Extrusion
-
-```bash
-python tests/test_buildings.py
-```
-
-Extrudes building footprints to 3D boxes with proper triangulation. Expected: 1211 buildings, 20k vertices. Exports to `temp/test_buildings.obj`.
-
-### Test Full Pipeline
-
-```bash
+# test full pipeline
 python tests/test_pipeline.py
 ```
 
-Complete pipeline: terrain + buildings merged with proper elevation. Expected: 86k vertices, 166k faces. Exports to `temp/scene.obj`.
-
-## API Documentation
-
-Once running, visit:
-
-- Swagger UI: `http://localhost:8000/docs`
-- ReDoc: `http://localhost:8000/redoc`
-
-## Project Structure
+## structure
 
 ```
 backend/
 ├── app/
-│   ├── main.py               # FastAPI app + routes
-│   ├── generator.py          # Main mesh generation pipeline
-│   ├── terrain.py            # Terrain mesh generation
-│   ├── buildings.py          # Building extrusion
+│   ├── main.py          # fastapi app + routes
+│   ├── generator.py     # mesh generation pipeline
+│   ├── terrain.py       # terrain mesh from elevation
+│   ├── buildings.py     # building extrusion
+│   ├── textures.py      # satellite imagery fetching
 │   ├── fetchers/
-│   │   ├── mapbox.py         # Mapbox Terrain-RGB API
-│   │   └── overpass.py       # OSM data via Overpass API
+│   │   ├── mapbox.py    # terrain-rgb api
+│   │   └── overpass.py  # osm building data
 │   └── utils/
-│       ├── coords.py         # Coordinate transformations
-│       └── mesh.py           # Mesh utilities
-├── tests/
-│   ├── test_mapbox.py        # Test Mapbox terrain fetcher
-│   ├── test_overpass.py      # Test Overpass building fetcher
-│   ├── test_terrain.py       # Test terrain mesh generation
-│   ├── test_buildings.py     # Test building extrusion
-│   └── test_pipeline.py      # Test full pipeline (terrain + buildings)
-├── requirements.txt
-└── temp/                     # Temporary file storage
+│       ├── coords.py    # coordinate transformations
+│       └── mesh.py      # mesh utilities
+├── tests/               # test scripts
+├── docs/                # technical documentation
+└── temp/                # temporary file storage
 ```
 
-## Using in Blender
+## api
 
-**Download:** The API returns a ZIP file (`geomesh.zip`) containing all necessary files.
+### POST /generate
 
-**Extract and Import:**
+generate mesh for bounding box.
 
-1. Extract the ZIP file to a folder
-2. Drag only the `.obj` file into Blender
-3. Textures load automatically
+**body:**
 
-**Files in ZIP:**
+```json
+{
+  "bbox": {
+    "north": 43.48,
+    "south": 43.46,
+    "east": -80.52,
+    "west": -80.56
+  },
+  "quality": "medium"
+}
+```
 
-- `scene.obj` - 3D mesh geometry
-- `material.mtl` - Material definitions
-- `material_0.png` - Satellite texture for terrain
-- `terrain.png` - Original satellite image (optional)
+**response:** zip file with obj + mtl + texture png
 
-All files must be in the same folder for textures to load properly.
+**quality options:**
 
-## status
+- `low`: zoom 11, ~60m resolution, 512px texture
+- `medium`: zoom 12, ~30m resolution, 1024px texture (default)
+- `high`: zoom 13, ~15m resolution, 1280px texture
+- `ultra`: zoom 14, ~7.5m resolution, 1280px texture
 
-### completed
+### GET /quality-options
 
-- fastapi with cors, validation, health checks
-- mapbox terrain-rgb fetcher (multi-tile stitching, rgb→elevation)
-- overpass api building fetcher (osm ways/relations parsing)
-- terrain mesh generation (131k vertices, 260k triangles)
-- building extrusion with proper triangulation
-  - parses ALL outer ways from relations (complex shapes preserved)
-  - supports inner ways (courtyards/holes)
-  - bounding box fallback for failed extrusions
-  - 100% success rate with statistics tracking
-- full pipeline: bbox → terrain + buildings → merged obj
+returns available quality levels with descriptions.
 
-### building shape accuracy fixes
+### GET /health
 
-**fixed issue**: buildings were losing complex shapes (L/U/H-shaped)
+health check endpoint.
 
-**root cause**: `overpass.py` only used first outer way from osm relations
+## technical notes
 
-**solution**:
+- **bbox constraints:** 1-5km per side
+- **coordinate system:** y-up, 1 unit = 1 meter
+- **terrain smoothing:** gaussian filter (σ=1.5) applied to elevation data
+- **building placement:** elevation-aware using terrain mesh sampling
+- **output format:** wavefront obj + mtl with normals and uv coordinates
 
-- parse ALL outer ways → complex shapes preserved
-- support inner ways → courtyards work
-- bounding box fallback → no disappearing buildings
-- statistics tracking → transparency
+see `docs/` for detailed implementation documentation.
 
-### known limitations
+## known limitations
 
-- bbox requirements: 1km × 1km minimum, 5km × 5km maximum
-- unit: 1 obj unit = 1 meter
+- buildings are simple box extrusions (no architectural details)
+- building height estimation may be inaccurate if osm data is incomplete
+- buildings have flat bases (don't follow terrain slopes)
 - osm data completeness varies by location
-- overpass api can timeout (increase timeout if needed)
-
-see `STANDARDS.md` and `ACCURACY_ANALYSIS.md` for details
+- processing time: 30-120 seconds for large areas

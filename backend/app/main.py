@@ -223,7 +223,7 @@ async def generate_mesh(request: GenerateRequest):
             files_to_zip.append(material_png)
         
         # Create ZIP file
-        zip_path = os.path.join(TEMP_DIR, "geomesh.zip")
+        zip_path = os.path.join(TEMP_DIR, "tark.zip")
         with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
             for file_path in files_to_zip:
                 # Add file with just its basename (no directory structure)
