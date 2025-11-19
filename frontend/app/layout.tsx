@@ -8,8 +8,9 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Tark",
-  description: "turn any location into a game-ready 3d mesh",
+  title: "Tark — Google Earth for game developers",
+  description:
+    "Click anywhere on the map. Get game-ready 3D meshes in 20 seconds. Real terrain, real buildings, real textures.",
 };
 
 export default function RootLayout({

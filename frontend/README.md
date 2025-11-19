@@ -1,6 +1,6 @@
 # Tark frontend
 
-next.js web interface for generating 3d meshes from real locations.
+**Google Earth for game developers.** Click anywhere, get game-ready 3D meshes in seconds.
 
 ## setup
 

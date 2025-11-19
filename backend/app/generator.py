@@ -38,7 +38,9 @@ class MeshGenerator:
         east: float,
         west: float,
         include_buildings: bool = True,
-        include_textures: bool = True
+        include_textures: bool = True,
+        zoom_level: int = 12,
+        texture_max_dimension: int = 1280
     ) -> Tuple[str, Optional[str], List[str]]:
         """
         Generate mesh for the given bounding box
@@ -50,6 +52,8 @@ class MeshGenerator:
             west: West longitude
             include_buildings: Whether to include buildings (default: True)
             include_textures: Whether to generate textures (default: True)
+            zoom_level: Mapbox zoom level for terrain detail (default: 12)
+            texture_max_dimension: Maximum texture dimension in pixels (default: 1280)
         
         Returns:
             Tuple of (obj_file_path, mtl_file_path, texture_file_paths)
@@ -80,16 +84,15 @@ class MeshGenerator:
             # Calculate aspect ratio
             aspect_ratio = lon_meters / lat_meters if lat_meters > 0 else 1.0
             
-            # Calculate image dimensions maintaining aspect ratio (max 1280x1280)
-            max_dimension = 1280
+            # Calculate image dimensions maintaining aspect ratio
             if aspect_ratio >= 1.0:
                 # Wider than tall
-                width = max_dimension
-                height = int(max_dimension / aspect_ratio)
+                width = texture_max_dimension
+                height = int(texture_max_dimension / aspect_ratio)
             else:
                 # Taller than wide
-                height = max_dimension
-                width = int(max_dimension * aspect_ratio)
+                height = texture_max_dimension
+                width = int(texture_max_dimension * aspect_ratio)
             
             terrain_texture_path = os.path.join(self.temp_dir, "terrain.png")
             try:
@@ -106,10 +109,11 @@ class MeshGenerator:
                 terrain_texture_path = None
         
         # 2. Fetch elevation data from Mapbox
-        print("⏳ Fetching elevation data from Mapbox...")
-        mapbox_fetcher = MapboxTerrainFetcher(self.mapbox_token)
+        print(f"⏳ Fetching elevation data from Mapbox (zoom level {zoom_level})...")
+        # Use smoothing_sigma=1.5 for good balance between noise reduction and feature preservation
+        mapbox_fetcher = MapboxTerrainFetcher(self.mapbox_token, smoothing_sigma=1.5)
         elevation_data, elev_metadata = mapbox_fetcher.fetch_elevation(
-            north=north, south=south, east=east, west=west, zoom=12
+            north=north, south=south, east=east, west=west, zoom=zoom_level
         )
         print(f"✅ Fetched elevation: {elevation_data.shape}\n")
         
@@ -128,6 +132,13 @@ class MeshGenerator:
         else:
             print()
         
+        # Center terrain X and Z BEFORE buildings sample elevations
+        # This ensures buildings and terrain are in the same coordinate space
+        terrain_centroid_xz = terrain_mesh.centroid.copy()
+        terrain_centroid_xz[1] = 0  # Don't center Y - keep real elevations
+        terrain_mesh.vertices -= terrain_centroid_xz
+        print(f"   Centered terrain at X-Z origin (offset: X={terrain_centroid_xz[0]:.2f}, Z={terrain_centroid_xz[2]:.2f})\n")
+        
         meshes_to_merge = [terrain_mesh]
         
         # 4. Fetch and extrude buildings (if requested)
@@ -141,7 +152,8 @@ class MeshGenerator:
             
             if building_data:
                 print("⏳ Extruding buildings...")
-                # Pass terrain mesh so buildings can sit on terrain
+                # Pass terrain mesh so buildings can sit on terrain correctly
+                # Don't pass offset - buildings and terrain use same coordinate transformer
                 building_extruder = BuildingExtruder(center_lat, center_lon, terrain_mesh)
                 building_meshes = building_extruder.extrude_buildings(
                     building_data, min_height=3.0
@@ -155,10 +167,11 @@ class MeshGenerator:
         print("⏳ Merging meshes...")
         final_mesh = merge_meshes(meshes_to_merge)
         
-        # Center X and Z at origin, but preserve Y elevations (Y-up coordinate system)
-        centroid_xz = final_mesh.centroid.copy()
-        centroid_xz[1] = 0  # Don't center Y - keep real elevations
-        final_mesh.vertices -= centroid_xz
+        # Center the final merged mesh (terrain is already centered, but buildings aren't)
+        final_centroid_xz = final_mesh.centroid.copy()
+        final_centroid_xz[1] = 0  # Don't center Y
+        final_mesh.vertices -= final_centroid_xz
+        print(f"   Final centering offset: X={final_centroid_xz[0]:.2f}, Z={final_centroid_xz[2]:.2f}")
         
         print(f"✅ Final mesh: {len(final_mesh.vertices):,} vertices, {len(final_mesh.faces):,} faces\n")
         

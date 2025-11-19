@@ -43,7 +43,7 @@ def test_full_pipeline():
         generator = MeshGenerator(str(temp_dir), access_token)
         
         # Generate complete scene
-        obj_path, mtl_path = generator.generate(
+        obj_path, mtl_path, texture_files = generator.generate(
             north=north,
             south=south,
             east=east,
@@ -55,6 +55,8 @@ def test_full_pipeline():
         print(f"   OBJ file: {obj_path}")
         if mtl_path:
             print(f"   MTL file: {mtl_path}")
+        if texture_files:
+            print(f"   Texture files: {len(texture_files)}")
         
         # Verify files exist
         print("\n🔍 Sanity checks:")

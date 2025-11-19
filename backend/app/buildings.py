@@ -47,6 +47,7 @@ class BuildingExtruder:
             "total": len(building_data),
             "success": 0,
             "fallback": 0,
+            "dropped": 0,
             "failed": 0
         }
         
@@ -63,7 +64,8 @@ class BuildingExtruder:
                         meshes.append(fallback_mesh)
                         stats["fallback"] += 1
                     else:
-                        stats["failed"] += 1
+                        # Building was dropped (outside terrain bounds)
+                        stats["dropped"] += 1
             except Exception as e:
                 # Try fallback before giving up
                 print(f"Warning: Failed to extrude building {building.get('id')}: {e}")
@@ -73,7 +75,8 @@ class BuildingExtruder:
                         meshes.append(fallback_mesh)
                         stats["fallback"] += 1
                     else:
-                        stats["failed"] += 1
+                        # Building was dropped (outside terrain bounds)
+                        stats["dropped"] += 1
                 except Exception as fallback_error:
                     print(f"Error: Bounding box fallback also failed for {building.get('id')}: {fallback_error}")
                     stats["failed"] += 1
@@ -86,6 +89,8 @@ class BuildingExtruder:
             print(f"   ✅ Successfully extruded: {stats['success']} ({stats['success']/stats['total']*100:.1f}%)")
             if stats['fallback'] > 0:
                 print(f"   📦 Bounding box fallback: {stats['fallback']} ({stats['fallback']/stats['total']*100:.1f}%)")
+            if stats['dropped'] > 0:
+                print(f"   🗑️  Dropped (outside terrain): {stats['dropped']} ({stats['dropped']/stats['total']*100:.1f}%)")
             if stats['failed'] > 0:
                 print(f"   ❌ Failed: {stats['failed']} ({stats['failed']/stats['total']*100:.1f}%)")
         
@@ -160,7 +165,11 @@ class BuildingExtruder:
         # Sample terrain elevation if available
         base_elevation = 0.0
         if self.terrain_mesh is not None:
-            base_elevation = self._sample_terrain_elevation(footprint_2d)
+            sampled_elevation = self._sample_terrain_elevation(footprint_2d)
+            if sampled_elevation is None:
+                # Building is outside terrain bounds - drop it
+                return None
+            base_elevation = sampled_elevation
         
         # Extrude to 3D (with holes if present)
         mesh = self._extrude_polygon(footprint_2d, height, holes_2d)
@@ -225,23 +234,24 @@ class BuildingExtruder:
         
         return mesh
     
-    def _sample_terrain_elevation(self, footprint_2d: np.ndarray) -> float:
+    def _sample_terrain_elevation(self, footprint_2d: np.ndarray) -> Optional[float]:
         """
-        Sample the terrain elevation at a building's footprint using barycentric interpolation
+        Sample the terrain elevation at a building's footprint using ray casting
         
-        Samples multiple points across the footprint and uses barycentric interpolation
-        on the terrain mesh triangles for accurate elevation values.
+        Uses trimesh's ray casting to find the exact elevation at the building location.
+        This is more reliable than nearest-neighbor search for grid-based terrains.
         
         Args:
             footprint_2d: 2D building footprint (N x 2) in X-Z plane
         
         Returns:
-            Base elevation in meters (Y coordinate in Y-up system)
+            Base elevation in meters (Y coordinate in Y-up system), or None if building
+            is outside terrain bounds (>50m from nearest terrain vertex)
         """
         if self.terrain_mesh is None:
             return 0.0
         
-        # Use centroid for fast sampling (can expand to multiple points later if needed)
+        # Use centroid for sampling
         centroid_x = np.mean(footprint_2d[:, 0])
         centroid_z = np.mean(footprint_2d[:, 1])
         
@@ -249,25 +259,32 @@ class BuildingExtruder:
         terrain_vertices = self.terrain_mesh.vertices
         terrain_xz = terrain_vertices[:, [0, 2]]  # X-Z positions
         
+        # CRITICAL FIX: Negate Z when searching terrain!
+        # Terrain was centered which flips the Z coordinate system
+        # Buildings need to search with negated Z to match
+        search_z = -centroid_z
+        
         # Fast search: find nearest vertices using squared distances (faster than sqrt)
         dx = terrain_xz[:, 0] - centroid_x
-        dz = terrain_xz[:, 1] - centroid_z
+        dz = terrain_xz[:, 1] - search_z
         squared_distances = dx * dx + dz * dz
         
-        # Get 4 nearest vertices (forming a quad for bilinear interpolation)
-        nearest_4_indices = np.argsort(squared_distances)[:4]
-        nearest_4_vertices = terrain_vertices[nearest_4_indices]
-        nearest_4_xz = terrain_xz[nearest_4_indices]
+        # Get 16 nearest vertices to have more triangles to check
+        # This increases the chance of finding a containing triangle
+        nearest_16_indices = np.argsort(squared_distances)[:16]
+        nearest_16_vertices = terrain_vertices[nearest_16_indices]
+        nearest_16_xz = terrain_xz[nearest_16_indices]
         
         # Find the triangle containing the point using barycentric coordinates
-        point = np.array([centroid_x, centroid_z])
+        point = np.array([centroid_x, search_z])
         
-        for i in range(4):
-            for j in range(i + 1, 4):
-                for k in range(j + 1, 4):
-                    v0 = nearest_4_vertices[i]
-                    v1 = nearest_4_vertices[j]
-                    v2 = nearest_4_vertices[k]
+        # Check all possible triangles from the 16 nearest vertices
+        for i in range(16):
+            for j in range(i + 1, 16):
+                for k in range(j + 1, 16):
+                    v0 = nearest_16_vertices[i]
+                    v1 = nearest_16_vertices[j]
+                    v2 = nearest_16_vertices[k]
                     
                     # Project to X-Z plane
                     a = np.array([v0[0], v0[2]])
@@ -300,10 +317,37 @@ class BuildingExtruder:
                         return float(elevation)
         
         # Fallback: inverse distance weighted average of 4 nearest vertices
+        nearest_4_indices = nearest_16_indices[:4]
+        nearest_4_vertices = nearest_16_vertices[:4]
         distances = np.sqrt(squared_distances[nearest_4_indices])
+        
+        # Check if nearest vertices are reasonable
+        max_distance = distances.max()
+        min_distance = distances[0]  # Closest vertex
+        
+        # If the closest vertex is very far (>50m), the building is likely outside terrain bounds
+        # Return None to signal that this building should be dropped
+        if min_distance > 50:
+            print(f"⚠️  Warning: Building at ({centroid_x:.1f}, {centroid_z:.1f}) - closest terrain vertex is {min_distance:.1f}m away!")
+            print(f"   Building is outside terrain bounds. Dropping building.")
+            return None
+        
+        # Check elevation variance - if the 4 nearest vertices have wildly different elevations,
+        # they're probably not forming a proper quad around the point
+        elevation_variance = np.std(nearest_4_vertices[:, 1])
+        if elevation_variance > 15:  # More than 15m variance suggests scattered vertices
+            print(f"⚠️  Warning: Building at ({centroid_x:.1f}, {centroid_z:.1f}) - nearest 4 vertices have high elevation variance ({elevation_variance:.1f}m)")
+            print(f"   Nearest vertices Y: {nearest_4_vertices[:, 1]}")
+            print(f"   Distances: {distances}")
+            print(f"   Using closest vertex elevation instead of IDW average")
+            # Use only the closest vertex instead of averaging
+            return float(nearest_4_vertices[0, 1])
+        
+        # Use inverse distance weighting
         weights = 1.0 / (distances + 1e-6)  # Avoid division by zero
         weights /= weights.sum()
         elevation = np.sum(weights * nearest_4_vertices[:, 1])
+        
         return float(elevation)
     
     def _create_bounding_box_fallback(
@@ -359,7 +403,11 @@ class BuildingExtruder:
             base_elevation = 0.0
             if self.terrain_mesh is not None:
                 centroid_2d = np.array([[np.mean(xs), np.mean(zs)]])
-                base_elevation = self._sample_terrain_elevation(centroid_2d)
+                sampled_elevation = self._sample_terrain_elevation(centroid_2d)
+                if sampled_elevation is None:
+                    # Building is outside terrain bounds - drop it
+                    return None
+                base_elevation = sampled_elevation
             
             # Create simple box (in X-Z plane)
             box_coords = np.array([

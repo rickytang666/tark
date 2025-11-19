@@ -65,9 +65,9 @@ function BoundsSelector({ onBoundsChange }: MapSelectorProps) {
     <Rectangle
       bounds={bounds}
       pathOptions={{
-        color: "#3b82f6",
+        color: "#60a5fa",
         weight: 2,
-        fillOpacity: 0.1,
+        fillOpacity: 0.15,
       }}
     />
   ) : null;
@@ -84,14 +84,18 @@ export default function MapSelector({ onBoundsChange }: MapSelectorProps) {
 
   if (!isMounted) {
     return (
-      <div className="h-[500px] w-full rounded border border-neutral-800 bg-neutral-900 flex items-center justify-center">
-        <p className="text-sm text-neutral-500">loading map...</p>
+      <div className="h-[500px] w-full rounded-lg border border-neutral-800 bg-neutral-900/50 backdrop-blur flex items-center justify-center">
+        <div className="flex items-center gap-3">
+          <div className="h-4 w-4 animate-spin rounded-full border-2 border-neutral-600 border-t-neutral-400"></div>
+          <p className="text-sm text-neutral-400">loading map...</p>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="h-[500px] w-full rounded border border-neutral-800 overflow-hidden">
+    <div className="group relative h-[500px] w-full rounded-lg overflow-hidden border border-neutral-800 shadow-2xl transition-all hover:border-neutral-700 hover:shadow-blue-900/20">
+      <div className="absolute inset-0 bg-gradient-to-br from-blue-500/5 to-purple-500/5 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10"></div>
       <MapContainer
         center={[43.4722, -80.5439]} // uwaterloo
         zoom={12}

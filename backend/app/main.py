@@ -7,6 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 from typing import Optional
+from enum import Enum
 import os
 import math
 import zipfile
@@ -35,6 +36,39 @@ app.add_middleware(
 # Ensure temp directory exists
 TEMP_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "temp")
 os.makedirs(TEMP_DIR, exist_ok=True)
+
+
+class MeshQuality(str, Enum):
+    """Mesh detail quality levels (within Mapbox free tier limits)"""
+    LOW = "low"          # zoom=11, faster, ~60m resolution, 512x512 texture
+    MEDIUM = "medium"    # zoom=12, balanced, ~30m resolution, 1024x1024 texture (default)
+    HIGH = "high"        # zoom=13, detailed, ~15m resolution, 1280x1280 texture
+    ULTRA = "ultra"      # zoom=14, very detailed, ~7.5m resolution, 1280x1280 texture
+
+
+# Quality settings mapping
+QUALITY_SETTINGS = {
+    MeshQuality.LOW: {
+        "zoom": 11,
+        "texture_max": 512,
+        "description": "Fast generation, lower detail (~60m terrain resolution)"
+    },
+    MeshQuality.MEDIUM: {
+        "zoom": 12,
+        "texture_max": 1024,
+        "description": "Balanced speed and detail (~30m terrain resolution)"
+    },
+    MeshQuality.HIGH: {
+        "zoom": 13,
+        "texture_max": 1280,
+        "description": "High detail, slower generation (~15m terrain resolution)"
+    },
+    MeshQuality.ULTRA: {
+        "zoom": 14,
+        "texture_max": 1280,
+        "description": "Ultra detail, slow generation (~7.5m terrain resolution)"
+    },
+}
 
 
 class BoundingBox(BaseModel):
@@ -97,20 +131,54 @@ async def health():
     }
 
 
+class GenerateRequest(BaseModel):
+    """Request body for mesh generation"""
+    bbox: BoundingBox
+    quality: MeshQuality = Field(
+        default=MeshQuality.MEDIUM,
+        description="Mesh detail quality level"
+    )
+
+
+@app.get("/quality-options")
+async def get_quality_options():
+    """
+    Get available quality options with descriptions
+    
+    Returns:
+        Dictionary of quality levels and their settings
+    """
+    return {
+        "options": [
+            {
+                "value": quality.value,
+                "label": quality.value.title(),
+                "zoom": settings["zoom"],
+                "description": settings["description"]
+            }
+            for quality, settings in QUALITY_SETTINGS.items()
+        ],
+        "default": MeshQuality.MEDIUM.value
+    }
+
+
 @app.post("/generate")
-async def generate_mesh(bbox: BoundingBox):
+async def generate_mesh(request: GenerateRequest):
     """
     Generate 3D mesh for the specified bounding box
     
     Args:
-        bbox: Geographic bounding box (north, south, east, west)
+        request: Contains bounding box and quality settings
     
     Returns:
         ZIP file containing .obj, .mtl, and texture .png files
     """
     try:
         # Validate bounding box
-        bbox.validate_bbox()
+        request.bbox.validate_bbox()
+        
+        # Get quality settings
+        quality_config = QUALITY_SETTINGS[request.quality]
         
         # Get Mapbox token
         mapbox_token = os.getenv("MAPBOX_ACCESS_TOKEN")
@@ -120,15 +188,17 @@ async def generate_mesh(bbox: BoundingBox):
                 detail="MAPBOX_ACCESS_TOKEN not configured"
             )
         
-        # Generate mesh
+        # Generate mesh with quality settings
         generator = MeshGenerator(TEMP_DIR, mapbox_token)
         obj_path, mtl_path, texture_files = generator.generate(
-            north=bbox.north,
-            south=bbox.south,
-            east=bbox.east,
-            west=bbox.west,
+            north=request.bbox.north,
+            south=request.bbox.south,
+            east=request.bbox.east,
+            west=request.bbox.west,
             include_buildings=True,
-            include_textures=True
+            include_textures=True,
+            zoom_level=quality_config["zoom"],
+            texture_max_dimension=quality_config["texture_max"]
         )
         
         # Verify OBJ file exists

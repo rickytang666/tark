@@ -1,14 +1,39 @@
-# markdown
-*.md
-!README.md
+# Python
+__pycache__/
+*.py[cod]
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
 
 # Backend
-backend/venv
+backend/venv/
 backend/.env
-backend/temp/*.obj
+backend/temp/*
+!backend/temp/.gitkeep
 
 # Frontend
-frontend/node_modules
-frontend/.next
+frontend/node_modules/
+frontend/.next/
 frontend/.env*.local
-frontend/.turbopack
+!frontend/.env.example
+frontend/.turbopack/
+
+# Markdown
+plan/*.md
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
