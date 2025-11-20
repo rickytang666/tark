@@ -109,36 +109,36 @@ export async function generateMesh(
   }
   
   try {
-    const response = await fetch(`${API_URL}/generate`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
+  const response = await fetch(`${API_URL}/generate`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
       body: JSON.stringify({ bbox, quality, job_id: jobId }),
-    });
+  });
 
     if (pollInterval) clearInterval(pollInterval);
 
-    if (!response.ok) {
-      const error = await response.json().catch(() => ({ detail: "Failed to generate mesh" }));
-      throw new Error(error.detail || "Failed to generate mesh");
-    }
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ detail: "Failed to generate mesh" }));
+    throw new Error(error.detail || "Failed to generate mesh");
+  }
 
-    // Get filename from response headers or use default
-    const contentDisposition = response.headers.get("content-disposition");
-    const filenameMatch = contentDisposition?.match(/filename="?(.+)"?/i);
-    const filename = filenameMatch ? filenameMatch[1] : "tark.zip";
+  // Get filename from response headers or use default
+  const contentDisposition = response.headers.get("content-disposition");
+  const filenameMatch = contentDisposition?.match(/filename="?(.+)"?/i);
+  const filename = filenameMatch ? filenameMatch[1] : "tark.zip";
 
-    // Download file
-    const blob = await response.blob();
-    const url = window.URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = filename;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    window.URL.revokeObjectURL(url);
+  // Download file
+  const blob = await response.blob();
+  const url = window.URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  window.URL.revokeObjectURL(url);
     
     // Final progress update
     if (onProgress) {
