@@ -1,123 +1,102 @@
-"""
-Test script for building extrusion
-Tests converting building footprints to 3D meshes
-"""
+import pytest
+import numpy as np
+import trimesh
 import sys
 from pathlib import Path
 
 # Add parent directory to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from app.fetchers.overpass import OverpassFetcher
 from app.buildings import BuildingExtruder
-from app.utils.mesh import merge_meshes
+from app.terrain import TerrainGenerator
 
+@pytest.fixture
+def center_coords():
+    return 43.4723, -80.5449
 
-def test_building_extrusion():
-    """Test building extrusion with real OSM data"""
-    
-    print("🏢 Testing Building Extrusion\n")
-    
-    # Test area: University of Waterloo, Ontario (2km × 2km)
-    north = 43.482620
-    south = 43.464602
-    east = -80.525265
-    west = -80.550290
-    
-    center_lat = (north + south) / 2
-    center_lon = (east + west) / 2
-    
-    print(f"📍 Test area:")
-    print(f"   Center: ({center_lat:.4f}, {center_lon:.4f})\n")
-    
-    try:
-        # 1. Fetch building data
-        print("⏳ Fetching building data from OSM...")
-        fetcher = OverpassFetcher(timeout=25)
-        buildings = fetcher.fetch_buildings(
-            north=north, south=south, east=east, west=west
-        )
-        print(f"✅ Fetched {len(buildings)} buildings\n")
-        
-        # 2. Extrude buildings
-        print("⏳ Extruding buildings to 3D meshes...")
-        extruder = BuildingExtruder(center_lat, center_lon)
-        building_meshes = extruder.extrude_buildings(buildings, min_height=3.0)
-        print(f"✅ Extruded {len(building_meshes)} buildings\n")
-        
-        # 3. Display results
-        print("📊 Extrusion Statistics:")
-        print(f"   Total buildings fetched: {len(buildings)}")
-        print(f"   Successfully extruded: {len(building_meshes)}")
-        print(f"   Success rate: {len(building_meshes)/len(buildings)*100:.1f}%")
-        
-        if building_meshes:
-            total_vertices = sum(len(m.vertices) for m in building_meshes)
-            total_faces = sum(len(m.faces) for m in building_meshes)
-            print(f"   Total vertices: {total_vertices:,}")
-            print(f"   Total faces: {total_faces:,}")
-            
-            # Sample building stats
-            print(f"\n   Sample buildings:")
-            for i, mesh in enumerate(building_meshes[:3]):
-                building = buildings[i]
-                height = building.get("height") or extruder.estimate_height(
-                    building.get("building_type", "yes"),
-                    building.get("levels")
-                )
-                print(f"     {i+1}. Type: {building['building_type']}, "
-                      f"Height: {height:.1f}m, "
-                      f"Vertices: {len(mesh.vertices)}, "
-                      f"Faces: {len(mesh.faces)}")
-        
-        # 4. Sanity checks
-        print("\n🔍 Sanity checks:")
-        
-        if len(building_meshes) > 0:
-            print(f"   ✅ Extruded {len(building_meshes)} building meshes")
-        else:
-            print("   ❌ No buildings extruded")
-            return False
-        
-        # Check success rate
-        success_rate = len(building_meshes) / len(buildings)
-        if success_rate > 0.8:
-            print(f"   ✅ High success rate: {success_rate*100:.1f}%")
-        else:
-            print(f"   ⚠️  Low success rate: {success_rate*100:.1f}%")
-        
-        # Check meshes are valid
-        valid_count = sum(1 for m in building_meshes if len(m.vertices) > 0 and len(m.faces) > 0)
-        if valid_count == len(building_meshes):
-            print(f"   ✅ All meshes have vertices and faces")
-        
-        # Check buildings have height
-        avg_height = sum(m.vertices[:, 2].max() for m in building_meshes) / len(building_meshes)
-        print(f"   ✅ Average building height: {avg_height:.1f}m")
-        
-        # 5. Merge all buildings into single mesh
-        print("\n⏳ Merging all buildings into single mesh...")
-        merged_mesh = merge_meshes(building_meshes)
-        print(f"✅ Merged mesh: {len(merged_mesh.vertices):,} vertices, {len(merged_mesh.faces):,} faces")
-        
-        # 6. Export to file
-        output_path = Path(__file__).parent.parent / "temp" / "test_buildings.obj"
-        output_path.parent.mkdir(exist_ok=True)
-        merged_mesh.export(str(output_path))
-        print(f"\n💾 Exported buildings to: {output_path}")
-        print("   Import into Blender/Unity to visualize!")
-        
-        print("\n✅ All tests passed!")
-        return True
-        
-    except Exception as e:
-        print(f"\n❌ Error: {e}")
-        import traceback
-        traceback.print_exc()
-        return False
+@pytest.fixture
+def simple_building_data(center_coords):
+    lat, lon = center_coords
+    # Small square building around center
+    return [{
+        "id": 1,
+        "type": "way",
+        "coordinates": [
+            [lon, lat],
+            [lon + 0.0001, lat],
+            [lon + 0.0001, lat + 0.0001],
+            [lon, lat + 0.0001],
+            [lon, lat]  # Close loop
+        ],
+        "building_type": "residential",
+        "height": 10.0,
+        "levels": 3,
+        "tags": {}
+    }]
 
+def test_extrude_simple_building(center_coords, simple_building_data):
+    """Test extruding a building without terrain"""
+    lat, lon = center_coords
+    extruder = BuildingExtruder(lat, lon, terrain_mesh=None)
+    
+    meshes = extruder.extrude_buildings(simple_building_data)
+    
+    assert len(meshes) == 1
+    mesh = meshes[0]
+    assert isinstance(mesh, trimesh.Trimesh)
+    
+    # Check vertex count. A box has 8 vertices, but triangulation might split faces.
+    # At minimum > 0
+    assert len(mesh.vertices) > 0
+    assert len(mesh.faces) > 0
+    
+    # Check height (approx)
+    # y-min should be 0 (no terrain)
+    # y-max should be 10 (height)
+    y_vals = mesh.vertices[:, 1]
+    assert np.isclose(y_vals.min(), 0.0, atol=0.1)
+    assert np.isclose(y_vals.max(), 10.0, atol=0.1)
 
-if __name__ == "__main__":
-    success = test_building_extrusion()
-    sys.exit(0 if success else 1)
+def test_extrude_with_terrain(center_coords, simple_building_data):
+    """Test extruding a building on top of terrain"""
+    lat, lon = center_coords
+    
+    # Create simple flat terrain at elevation 50m
+    elevation_data = np.full((10, 10), 50.0)
+    # Bounds surrounding the building
+    bounds = (lon - 0.01, lat - 0.01, lon + 0.01, lat + 0.01)
+    
+    terrain_gen = TerrainGenerator()
+    terrain_mesh = terrain_gen.generate_mesh(elevation_data, bounds, resolution=100)
+    # Be careful: TerrainGenerator generates Y-up vertices.
+    # We should NOT manually center it here because BuildingExtruder expects absolute coords relative to its own transformer?
+    # Wait, BuildingExtruder uses its own transformer.
+    # And TerrainGenerator creates vertices based on ITS own transformer.
+    # If we pass different center lat/lon to both, they won't align.
+    # But TerrainGenerator calculates its own center from bounds.
+    # BuildingExtruder takes explicit center.
+    # To make them match, we should align them.
+    
+    # Let's inspect how they align.
+    # TerrainGenerator center: mid of bounds.
+    # Bounds: (lon-0.01, lat-0.01, lon+0.01, lat+0.01) -> center is (lat, lon) which matches our fixture.
+    # So they should align perfectly.
+    
+    extruder = BuildingExtruder(lat, lon, terrain_mesh=terrain_mesh)
+    meshes = extruder.extrude_buildings(simple_building_data)
+    
+    assert len(meshes) == 1
+    mesh = meshes[0]
+    
+    # Check base elevation
+    # Should be sitting on top of 50m terrain
+    y_vals = mesh.vertices[:, 1]
+    # Min y should be ~50
+    assert np.isclose(y_vals.min(), 50.0, atol=1.0)
+    # Max y should be ~60 (50 + 10 building height)
+    assert np.isclose(y_vals.max(), 60.0, atol=1.0)
 
+def test_estimate_height():
+    ext = BuildingExtruder(0, 0)
+    assert ext.estimate_height("residential", levels=5) == 17.5 # 5 * 3.5
+    assert ext.estimate_height("commercial") == 15.0 # default

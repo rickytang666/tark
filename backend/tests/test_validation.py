@@ -1,78 +1,54 @@
-"""
-Test bbox validation with proper size constraints
-"""
+import pytest
 import sys
 from pathlib import Path
 
+# Add parent directory to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from app.main import BoundingBox
 
-
-def test_bbox_validation():
-    """Test bbox size validation"""
-    
-    print("🔍 Testing BBox Validation\n")
-    
-    # Test 1: Too small (100m × 100m) - should FAIL
-    print("Test 1: 100m × 100m (too small)")
-    try:
-        bbox = BoundingBox(
-            north=43.4730,
-            south=43.4721,  # ~100m
-            east=-80.5430,
-            west=-80.5439  # ~100m
-        )
+def test_bbox_validation_too_small():
+    """Test bbox too small (< 1km)"""
+    # 100m x 100m
+    bbox = BoundingBox(
+        north=43.4730,
+        south=43.4721,
+        east=-80.5430,
+        west=-80.5439
+    )
+    with pytest.raises(ValueError, match="Area too small"):
         bbox.validate_bbox()
-        print("   ❌ Should have failed but didn't\n")
-    except ValueError as e:
-        print(f"   ✅ Correctly rejected: {e}\n")
-    
-    # Test 2: Just right (1.5km × 1.5km) - should PASS
-    print("Test 2: 1.5km × 1.5km (good size)")
-    try:
-        bbox = BoundingBox(
-            north=43.4797,
-            south=43.4662,  # ~1.5km
-            east=-80.5364,
-            west=-80.5544  # ~1.5km
-        )
-        bbox.validate_bbox()
-        print("   ✅ Accepted\n")
-    except ValueError as e:
-        print(f"   ❌ Should have passed: {e}\n")
-    
-    # Test 3: Too large (6km × 6km) - should FAIL
-    print("Test 3: 6km × 6km (too large)")
-    try:
-        bbox = BoundingBox(
-            north=43.5000,
-            south=43.4460,  # ~6km
-            east=-80.5000,
-            west=-80.5800  # ~6km
-        )
-        bbox.validate_bbox()
-        print("   ❌ Should have failed but didn't\n")
-    except ValueError as e:
-        print(f"   ✅ Correctly rejected: {e}\n")
-    
-    # Test 4: Exactly 2km × 2km (ideal) - should PASS
-    print("Test 4: 2km × 2km (ideal size)")
-    try:
-        bbox = BoundingBox(
-            north=43.4822,
-            south=43.4642,  # ~2km
-            east=-80.5254,
-            west=-80.5504  # ~2km
-        )
-        bbox.validate_bbox()
-        print("   ✅ Accepted (ideal size for realistic terrain)\n")
-    except ValueError as e:
-        print(f"   ❌ Should have passed: {e}\n")
-    
-    print("✅ Validation tests complete!")
 
+def test_bbox_validation_too_large():
+    """Test bbox too large (> 5km)"""
+    # 6km x 6km
+    bbox = BoundingBox(
+        north=43.5000,
+        south=43.4460,
+        east=-80.5000,
+        west=-80.5800
+    )
+    with pytest.raises(ValueError, match="Area too large"):
+        bbox.validate_bbox()
 
-if __name__ == "__main__":
-    test_bbox_validation()
+def test_bbox_validation_valid():
+    """Test valid bbox (approx 2km x 2km)"""
+    bbox = BoundingBox(
+        north=43.4822,
+        south=43.4642,
+        east=-80.5254,
+        west=-80.5504
+    )
+    assert bbox.validate_bbox() is True
 
+def test_bbox_validation_coordinates():
+    """Test invalid coordinates logic"""
+    # North < South
+    bbox = BoundingBox(north=40.0, south=41.0, east=-80.0, west=-80.1)
+    with pytest.raises(ValueError, match="North must be greater than south"):
+        bbox.validate_bbox()
+        
+    # East < West
+    bbox = BoundingBox(north=41.0, south=40.0, east=-80.1, west=-80.0)
+    with pytest.raises(ValueError, match="East must be greater than west"):
+        bbox.validate_bbox()

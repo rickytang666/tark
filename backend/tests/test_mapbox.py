@@ -1,106 +1,75 @@
-"""
-Test script for Mapbox Terrain-RGB fetcher
-Tests fetching elevation data for a small area
-"""
-import os
+import pytest
+from unittest.mock import patch, MagicMock
+import numpy as np
+from PIL import Image
+from io import BytesIO
 import sys
 from pathlib import Path
-from dotenv import load_dotenv
 
 # Add parent directory to path to import app modules
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from app.fetchers.mapbox import MapboxTerrainFetcher
 
-# Load environment variables from .env file
-load_dotenv()
+@pytest.fixture
+def mock_terrain_rgb_image():
+    """Create a dummy 512x512 Terrain-RGB image"""
+    # Create a simple gradient image
+    # R * 256*256 + G * 256 + B -> Elevation
+    # Let's just make it simple: flat terrain at 0m
+    # 0m = -10000 + (val * 0.1) => val = 100000 => 0x0186A0
+    # R=1, G=134, B=160
+    width, height = 512, 512
+    color = (1, 134, 160)
+    image = Image.new('RGB', (width, height), color)
+    return image
 
-def test_mapbox_fetcher():
-    """Test the Mapbox terrain fetcher with a small area"""
-    
-    # Get access token from environment
-    access_token = os.getenv("MAPBOX_ACCESS_TOKEN")
-    
-    if not access_token:
-        print("❌ Error: MAPBOX_ACCESS_TOKEN not found")
-        print("\nTo set it up:")
-        print("  1. Copy .env.example to .env:")
-        print("     cp .env.example .env")
-        print("  2. Edit .env and add your Mapbox token")
-        print("  3. Get a free token from: https://account.mapbox.com/access-tokens/")
-        return False
-    
-    print("🗺️  Testing Mapbox Terrain-RGB Fetcher\n")
-    
-    # Test area: University of Waterloo, Ontario (2km × 2km)
-    north = 43.482620
-    south = 43.464602
-    east = -80.525265
-    west = -80.550290
-    
-    print(f"📍 Fetching elevation data for:")
-    print(f"   North: {north}")
-    print(f"   South: {south}")
-    print(f"   East: {east}")
-    print(f"   West: {west}")
-    print(f"   Area: ~{((north-south)*111)*((east-west)*111):.2f} km²\n")
-    
-    try:
-        # Initialize fetcher
-        fetcher = MapboxTerrainFetcher(access_token)
-        
-        # Fetch elevation data
-        print("⏳ Fetching tiles from Mapbox...")
-        elevation_array, metadata = fetcher.fetch_elevation(
-            north=north,
-            south=south,
-            east=east,
-            west=west,
-            zoom=12  # ~30m resolution
-        )
-        
-        print("✅ Successfully fetched elevation data!\n")
-        
-        # Display results
-        print("📊 Results:")
-        print(f"   Array shape: {metadata['shape']}")
-        print(f"   Tiles fetched: {metadata['tiles_fetched']}")
-        print(f"   Min elevation: {metadata['min_elevation']:.2f} meters")
-        print(f"   Max elevation: {metadata['max_elevation']:.2f} meters")
-        print(f"   Elevation range: {metadata['max_elevation'] - metadata['min_elevation']:.2f} meters")
-        
-        # Sanity checks
-        print("\n🔍 Sanity checks:")
-        
-        if elevation_array.shape[0] > 0 and elevation_array.shape[1] > 0:
-            print("   ✅ Array has valid dimensions")
-        else:
-            print("   ❌ Array has invalid dimensions")
-            return False
-        
-        # uwaterloo area should have reasonable elevations
-        if -100 < metadata['min_elevation'] < 500 and 0 < metadata['max_elevation'] < 500:
-            print("   ✅ Elevation values look reasonable")
-        else:
-            print(f"   ⚠️  Elevation values seem unusual")
-        
-        if metadata['tiles_fetched'] > 0:
-            print(f"   ✅ Fetched {metadata['tiles_fetched']} tile(s)")
-        else:
-            print("   ❌ No tiles fetched")
-            return False
-        
-        print("\n✅ All tests passed!")
-        return True
-        
-    except Exception as e:
-        print(f"\n❌ Error during fetch: {e}")
-        import traceback
-        traceback.print_exc()
-        return False
+@pytest.fixture
+def fetcher():
+    return MapboxTerrainFetcher(access_token="fake_token")
 
+def test_lat_lon_to_tile(fetcher):
+    """Test coordinate to tile conversion"""
+    # Waterloo: ~43.4723, -80.5449
+    # Zoom 12
+    x, y = fetcher._lat_lon_to_tile(43.4723, -80.5449, 12)
+    assert isinstance(x, int)
+    assert isinstance(y, int)
+    # Expected values for this location at zoom 12
+    assert x == 1131
+    assert y == 1506
 
-if __name__ == "__main__":
-    success = test_mapbox_fetcher()
-    sys.exit(0 if success else 1)
+def test_decode_terrain_rgb(fetcher, mock_terrain_rgb_image):
+    """Test RGB to elevation decoding"""
+    # The mock image is set to 0m elevation
+    elevation = fetcher._decode_terrain_rgb(mock_terrain_rgb_image)
+    
+    assert elevation.shape == (512, 512)
+    # Allow small float error
+    assert np.allclose(elevation, 0.0, atol=0.1)
 
+@patch('requests.get')
+def test_fetch_elevation(mock_get, fetcher, mock_terrain_rgb_image):
+    """Test full fetch flow with mocked API"""
+    # Setup mock response
+    img_byte_arr = BytesIO()
+    mock_terrain_rgb_image.save(img_byte_arr, format='PNG')
+    img_byte_arr.seek(0)
+    
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.content = img_byte_arr.getvalue()
+    mock_get.return_value = mock_response
+
+    # Call fetch_elevation
+    # Bounds roughly matching tile 1131, 1506 at zoom 12
+    north, south = 43.5, 43.4
+    east, west = -80.5, -80.6
+    
+    elevation, metadata = fetcher.fetch_elevation(north, south, east, west, zoom=12)
+    
+    assert isinstance(elevation, np.ndarray)
+    assert len(elevation.shape) == 2
+    assert metadata['tiles_fetched'] > 0
+    assert metadata['min_elevation'] is not None
+    assert metadata['max_elevation'] is not None
