@@ -37,7 +37,7 @@ def test_lat_lon_to_tile(fetcher):
     assert isinstance(y, int)
     # Expected values for this location at zoom 12
     assert x == 1131
-    assert y == 1506
+    assert y == 1497
 
 def test_decode_terrain_rgb(fetcher, mock_terrain_rgb_image):
     """Test RGB to elevation decoding"""
@@ -61,10 +61,14 @@ def test_fetch_elevation(mock_get, fetcher, mock_terrain_rgb_image):
     mock_response.content = img_byte_arr.getvalue()
     mock_get.return_value = mock_response
 
-    # Call fetch_elevation
-    # Bounds roughly matching tile 1131, 1506 at zoom 12
-    north, south = 43.5, 43.4
-    east, west = -80.5, -80.6
+    # Calculate bounds that definitely fall within a tile
+    # Tile 1131, 1497 at Zoom 12
+    # Use center of tile to be safe
+    # x=1131 -> lon roughly -80.5
+    # y=1497 -> lat roughly 43.47
+    
+    north, south = 43.48, 43.47
+    east, west = -80.54, -80.55
     
     elevation, metadata = fetcher.fetch_elevation(north, south, east, west, zoom=12)
     

@@ -53,8 +53,10 @@ class MapboxTerrainFetcher:
             metadata: Dict with bounds, resolution, etc.
         """
         # 1. Calculate tile coordinates for bbox
-        min_tile_x, max_tile_y = self._lat_lon_to_tile(north, west, zoom)
-        max_tile_x, min_tile_y = self._lat_lon_to_tile(south, east, zoom)
+        # North latitude -> Smaller Y (Top) -> min_tile_y
+        # South latitude -> Larger Y (Bottom) -> max_tile_y
+        min_tile_x, min_tile_y = self._lat_lon_to_tile(north, west, zoom)
+        max_tile_x, max_tile_y = self._lat_lon_to_tile(south, east, zoom)
         
         # 2. Fetch all tiles that cover the bounding box
         tiles = []

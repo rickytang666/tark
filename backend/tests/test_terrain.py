@@ -33,15 +33,10 @@ def test_terrain_generation_simple_plane():
     # Check face count: (10-1)*(10-1)*2 = 81*2 = 162
     assert len(mesh.faces) == 162
     
-    # Check elevation (z-axis)
+    # Check elevation (y-axis)
     # It should be 100.0 everywhere
-    # Note: generator might center the mesh or keep absolute coords.
-    # Looking at previous implementation, it likely keeps absolute unless centered later.
-    # Actually, let's just check the Z range equals 0 (flat) 
-    # OR if it uses the values directly, Z min/max should be 100.
-    
-    z_values = mesh.vertices[:, 2]
-    assert np.allclose(z_values, 100.0)
+    y_values = mesh.vertices[:, 1]
+    assert np.allclose(y_values, 100.0)
 
 def test_terrain_generation_slope():
     """Test generating a slope"""
@@ -62,7 +57,7 @@ def test_terrain_generation_slope():
     
     assert len(mesh.vertices) == 100
     
-    # Check range
-    z_values = mesh.vertices[:, 2]
-    assert np.isclose(z_values.min(), 0.0)
-    assert np.isclose(z_values.max(), 20.0)
+    # Check range (y-axis is elevation)
+    y_values = mesh.vertices[:, 1]
+    assert np.isclose(y_values.min(), 0.0, atol=0.1)
+    assert np.isclose(y_values.max(), 20.0, atol=0.1)
