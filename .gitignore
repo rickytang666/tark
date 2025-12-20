@@ -33,6 +33,7 @@ plan/*.md
 *.swp
 *.swo
 *~
+.agent/
 
 # OS
 .DS_Store
