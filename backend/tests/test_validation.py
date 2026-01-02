@@ -2,7 +2,7 @@ import pytest
 import sys
 from pathlib import Path
 
-# Add parent directory to path
+# add parent directory to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from app.main import BoundingBox
@@ -16,7 +16,7 @@ def test_bbox_validation_too_small():
         east=-80.5430,
         west=-80.5439
     )
-    with pytest.raises(ValueError, match="Area too small"):
+    with pytest.raises(ValueError, match="area too small"):
         bbox.validate_bbox()
 
 def test_bbox_validation_too_large():
@@ -28,7 +28,7 @@ def test_bbox_validation_too_large():
         east=-80.5000,
         west=-80.5800
     )
-    with pytest.raises(ValueError, match="Area too large"):
+    with pytest.raises(ValueError, match="area too large"):
         bbox.validate_bbox()
 
 def test_bbox_validation_valid():
@@ -45,10 +45,10 @@ def test_bbox_validation_coordinates():
     """Test invalid coordinates logic"""
     # North < South
     bbox = BoundingBox(north=40.0, south=41.0, east=-80.0, west=-80.1)
-    with pytest.raises(ValueError, match="North must be greater than south"):
+    with pytest.raises(ValueError, match="north must be greater than south"):
         bbox.validate_bbox()
-        
+    
     # East < West
     bbox = BoundingBox(north=41.0, south=40.0, east=-80.1, west=-80.0)
-    with pytest.raises(ValueError, match="East must be greater than west"):
+    with pytest.raises(ValueError, match="east must be greater than west"):
         bbox.validate_bbox()
