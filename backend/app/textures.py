@@ -1,6 +1,6 @@
 """
-Texture generation and fetching for meshes
-Handles satellite imagery and procedural textures
+texture generation and fetching for meshes
+handles satellite imagery and procedural textures
 """
 import requests
 import numpy as np
@@ -12,15 +12,15 @@ import os
 
 class MapboxSatelliteFetcher:
     """
-    Fetches satellite imagery from Mapbox Static API
+    fetches satellite imagery from mapbox static api
     """
     
     def __init__(self, access_token: str):
         """
-        Initialize satellite fetcher
+        initialize satellite fetcher
         
-        Args:
-            access_token: Mapbox API access token
+        args:
+            access_token: mapbox api access token
         """
         self.access_token = access_token
         self.base_url = "https://api.mapbox.com/styles/v1"
@@ -37,25 +37,25 @@ class MapboxSatelliteFetcher:
         output_path: Optional[str] = None
     ) -> Tuple[Image.Image, str]:
         """
-        Fetch satellite imagery for bounding box
+        fetch satellite imagery for bounding box
         
-        Args:
-            north: North latitude
-            south: South latitude
-            east: East longitude
-            west: West longitude
-            width: Image width in pixels (max 1280 for free tier)
-            height: Image height in pixels (max 1280 for free tier)
-            output_path: Optional path to save the image
+        args:
+            north: north latitude
+            south: south latitude
+            east: east longitude
+            west: west longitude
+            width: image width in pixels (max 1280 for free tier)
+            height: image height in pixels (max 1280 for free tier)
+            output_path: optional path to save the image
         
-        Returns:
-            Tuple of (PIL Image, saved_path)
+        returns:
+            tuple of (pil image, saved_path)
         """
-        # Mapbox static API endpoint
-        # Format: /styles/v1/{username}/{style_id}/static/{bbox}/{width}x{height}
+        # mapbox static api endpoint
+        # format: /styles/v1/{username}/{style_id}/static/{bbox}/{width}x{height}
         bbox = f"[{west},{south},{east},{north}]"
         
-        # Clamp to free tier limits
+        # clamp to free tier limits
         width = min(width, 1280)
         height = min(height, 1280)
         
@@ -70,10 +70,10 @@ class MapboxSatelliteFetcher:
             response = requests.get(url, params=params, timeout=30)
             response.raise_for_status()
             
-            # Load image from response
+            # load image from response
             image = Image.open(BytesIO(response.content))
             
-            # Save if output path provided
+            # save if output path provided
             if output_path:
                 os.makedirs(os.path.dirname(output_path), exist_ok=True)
                 image.save(output_path, format='PNG')
@@ -93,25 +93,25 @@ class MapboxSatelliteFetcher:
         west: float
     ) -> Tuple[int, int]:
         """
-        Calculate recommended texture resolution based on bbox size
+        calculate recommended texture resolution based on bbox size
         
-        Args:
-            north, south, east, west: Bounding box coordinates
+        args:
+            north, south, east, west: bounding box coordinates
         
-        Returns:
-            Tuple of (width, height) in pixels
+        returns:
+            tuple of (width, height) in pixels
         """
-        # Calculate approximate bbox dimensions in meters
+        # calculate approximate bbox dimensions in meters
         center_lat = (north + south) / 2
         lat_meters = abs(north - south) * 111000
         lng_meters = abs(east - west) * 111000 * abs(np.cos(np.radians(center_lat)))
         
-        # Target: ~1 meter per pixel for good detail
-        # But clamp to Mapbox free tier limit (1280x1280)
+        # target: ~1 meter per pixel for good detail
+        # but clamp to mapbox free tier limit (1280x1280)
         width = min(int(lng_meters), 1280)
         height = min(int(lat_meters), 1280)
         
-        # Ensure minimum resolution
+        # ensure minimum resolution
         width = max(width, 512)
         height = max(height, 512)
         
@@ -120,7 +120,7 @@ class MapboxSatelliteFetcher:
 
 class TextureGenerator:
     """
-    Generates procedural textures for buildings
+    generates procedural textures for buildings
     """
     
     def __init__(self):
@@ -133,27 +133,27 @@ class TextureGenerator:
         height: int = 512
     ) -> Image.Image:
         """
-        Generate procedural texture for building type
+        generate procedural texture for building type
         
-        Args:
-            building_type: OSM building type (residential, commercial, etc.)
-            width: Texture width in pixels
-            height: Texture height in pixels
+        args:
+            building_type: osm building type (residential, commercial, etc.)
+            width: texture width in pixels
+            height: texture height in pixels
         
-        Returns:
-            PIL Image with procedural texture
+        returns:
+            pil image with procedural texture
         """
-        # TODO: Implement procedural texture generation
-        # For now, return solid colors based on type
+        # todo: implement procedural texture generation
+        # for now, return solid colors based on type
         
         color_map = {
-            "residential": (200, 180, 160),  # Beige/tan
-            "commercial": (180, 180, 180),   # Light grey
-            "industrial": (140, 120, 100),   # Brown
-            "retail": (190, 170, 150),       # Light tan
-            "office": (160, 160, 170),       # Blue-grey
-            "apartments": (210, 190, 170),   # Light beige
-            "house": (220, 200, 180),        # Cream
+            "residential": (200, 180, 160),  # beige/tan
+            "commercial": (180, 180, 180),   # light grey
+            "industrial": (140, 120, 100),   # brown
+            "retail": (190, 170, 150),       # light tan
+            "office": (160, 160, 170),       # blue-grey
+            "apartments": (210, 190, 170),   # light beige
+            "house": (220, 200, 180),        # cream
         }
         
         color = color_map.get(building_type, (180, 180, 180))

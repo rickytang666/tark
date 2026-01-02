@@ -1,6 +1,6 @@
 """
-Mapbox Terrain-RGB API fetcher
-Fetches elevation data from Mapbox terrain tiles
+mapbox terrain-rgb api fetcher
+fetches elevation data from mapbox terrain tiles
 """
 import requests
 import numpy as np
@@ -13,20 +13,20 @@ from scipy.ndimage import gaussian_filter
 
 class MapboxTerrainFetcher:
     """
-    Fetches elevation data from Mapbox Terrain-RGB API
+    fetches elevation data from mapbox terrain-rgb api
     """
     
     def __init__(self, access_token: str, smoothing_sigma: float = 1.0):
         """
-        Initialize Mapbox fetcher
+        initialize mapbox fetcher
         
-        Args:
-            access_token: Mapbox API access token
-            smoothing_sigma: Gaussian smoothing sigma (0 = no smoothing, 1-2 = light, 3-5 = heavy)
+        args:
+            access_token: mapbox api access token
+            smoothing_sigma: gaussian smoothing sigma (0 = no smoothing, 1-2 = light, 3-5 = heavy)
         """
         self.access_token = access_token
         self.base_url = "https://api.mapbox.com/v4/mapbox.terrain-rgb"
-        self.tile_size = 512  # Mapbox tiles are 512x512 pixels
+        self.tile_size = 512  # mapbox tiles are 512x512 pixels
         self.smoothing_sigma = smoothing_sigma
     
     def fetch_elevation(
@@ -38,27 +38,27 @@ class MapboxTerrainFetcher:
         zoom: int = 12
     ) -> Tuple[np.ndarray, dict]:
         """
-        Fetch elevation data for bounding box
+        fetch elevation data for bounding box
         
-        Args:
-            north: North latitude
-            south: South latitude
-            east: East longitude
-            west: West longitude
-            zoom: Zoom level (higher = more detail, default 12 ≈ 30m resolution)
+        args:
+            north: north latitude
+            south: south latitude
+            east: east longitude
+            west: west longitude
+            zoom: zoom level (higher = more detail, default 12 approx 30m resolution)
         
-        Returns:
-            Tuple of (elevation_array, metadata)
-            elevation_array: 2D numpy array of elevation values in meters
-            metadata: Dict with bounds, resolution, etc.
+        returns:
+            tuple of (elevation_array, metadata)
+            elevation_array: 2d numpy array of elevation values in meters
+            metadata: dict with bounds, resolution, etc.
         """
-        # 1. Calculate tile coordinates for bbox
-        # North latitude -> Smaller Y (Top) -> min_tile_y
-        # South latitude -> Larger Y (Bottom) -> max_tile_y
+        # 1. calculate tile coordinates for bbox
+        # north latitude -> smaller y (top) -> min_tile_y
+        # south latitude -> larger y (bottom) -> max_tile_y
         min_tile_x, min_tile_y = self._lat_lon_to_tile(north, west, zoom)
         max_tile_x, max_tile_y = self._lat_lon_to_tile(south, east, zoom)
         
-        # 2. Fetch all tiles that cover the bounding box
+        # 2. fetch all tiles that cover the bounding box
         tiles = []
         tile_positions = []
         
@@ -75,17 +75,17 @@ class MapboxTerrainFetcher:
         if not tiles:
             raise ValueError("Failed to fetch any tiles for the given bounding box")
         
-        # 3. Stitch tiles together
+        # 3. stitch tiles together
         stitched_image = self._stitch_tiles(tiles)
         
-        # 4. Decode RGB to elevation
+        # 4. decode rgb to elevation
         elevation_array = self._decode_terrain_rgb(stitched_image)
         
-        # 4.5. Apply smoothing to reduce noise and tile seams
+        # 4.5. apply smoothing to reduce noise and tile seams
         if self.smoothing_sigma > 0:
             elevation_array = self._smooth_elevation(elevation_array)
         
-        # 5. Crop to exact bounding box
+        # 5. crop to exact bounding box
         elevation_cropped, crop_bounds = self._crop_to_bbox(
             elevation_array,
             north, south, east, west,
@@ -93,7 +93,7 @@ class MapboxTerrainFetcher:
             zoom
         )
         
-        # 6. Prepare metadata
+        # 6. prepare metadata
         metadata = {
             "bounds": {"north": north, "south": south, "east": east, "west": west},
             "zoom": zoom,
@@ -108,15 +108,15 @@ class MapboxTerrainFetcher:
     
     def _lat_lon_to_tile(self, lat: float, lon: float, zoom: int) -> Tuple[int, int]:
         """
-        Convert latitude/longitude to tile coordinates
+        convert latitude/longitude to tile coordinates
         
-        Args:
-            lat: Latitude
-            lon: Longitude
-            zoom: Zoom level
+        args:
+            lat: latitude
+            lon: longitude
+            zoom: zoom level
         
-        Returns:
-            Tuple of (tile_x, tile_y)
+        returns:
+            tuple of (tile_x, tile_y)
         """
         lat_rad = math.radians(lat)
         n = 2.0 ** zoom
@@ -126,15 +126,15 @@ class MapboxTerrainFetcher:
     
     def _fetch_tile(self, zoom: int, x: int, y: int) -> Image.Image:
         """
-        Fetch a single terrain tile from Mapbox
+        fetch a single terrain tile from mapbox
         
-        Args:
-            zoom: Zoom level
-            x: Tile X coordinate
-            y: Tile Y coordinate
+        args:
+            zoom: zoom level
+            x: tile x coordinate
+            y: tile y coordinate
         
-        Returns:
-            PIL Image of the tile
+        returns:
+            pil image of the tile
         """
         url = f"{self.base_url}/{zoom}/{x}/{y}.pngraw"
         params = {"access_token": self.access_token}
@@ -143,7 +143,7 @@ class MapboxTerrainFetcher:
             response = requests.get(url, params=params, timeout=10)
             response.raise_for_status()
             
-            # Load image from response
+            # load image from response
             image = Image.open(BytesIO(response.content))
             return image
             
@@ -153,29 +153,29 @@ class MapboxTerrainFetcher:
     
     def _stitch_tiles(self, tiles: List[List[Image.Image]]) -> Image.Image:
         """
-        Stitch multiple tiles together into a single image
+        stitch multiple tiles together into a single image
         
-        Args:
-            tiles: 2D list of PIL Images (rows of tiles)
+        args:
+            tiles: 2d list of pil images (rows of tiles)
         
-        Returns:
-            Single stitched PIL Image
+        returns:
+            single stitched pil image
         """
         if not tiles or not tiles[0]:
             raise ValueError("No tiles to stitch")
         
-        # Calculate dimensions
+        # calculate dimensions
         rows = len(tiles)
         cols = len(tiles[0])
         tile_width = tiles[0][0].width
         tile_height = tiles[0][0].height
         
-        # Create new image
+        # create new image
         total_width = cols * tile_width
         total_height = rows * tile_height
         stitched = Image.new('RGB', (total_width, total_height))
         
-        # Paste tiles
+        # paste tiles
         for row_idx, row in enumerate(tiles):
             for col_idx, tile in enumerate(row):
                 x_offset = col_idx * tile_width
@@ -192,19 +192,19 @@ class MapboxTerrainFetcher:
         zoom: int
     ) -> Tuple[np.ndarray, dict]:
         """
-        Crop elevation array to exact bounding box
+        crop elevation array to exact bounding box
         
-        Args:
-            elevation_array: Full elevation array from stitched tiles
-            north, south, east, west: Desired bounding box
-            min_tile_x, min_tile_y, max_tile_x, max_tile_y: Tile coordinates
-            zoom: Zoom level
+        args:
+            elevation_array: full elevation array from stitched tiles
+            north, south, east, west: desired bounding box
+            min_tile_x, min_tile_y, max_tile_x, max_tile_y: tile coordinates
+            zoom: zoom level
         
-        Returns:
-            Tuple of (cropped_array, crop_bounds)
+        returns:
+            tuple of (cropped_array, crop_bounds)
         """
-        # For MVP, return the full array (cropping can be refined later)
-        # This gives us slightly more area than requested, which is fine
+        # for mvp, return the full array (cropping can be refined later)
+        # this gives us slightly more area than requested, which is fine
         return elevation_array, {
             "north": north,
             "south": south,
@@ -214,16 +214,16 @@ class MapboxTerrainFetcher:
     
     def _decode_terrain_rgb(self, image: Image.Image) -> np.ndarray:
         """
-        Decode Terrain-RGB image to elevation values
+        decode terrain-rgb image to elevation values
         
-        Mapbox Terrain-RGB encoding:
-        height = -10000 + ((R * 256 * 256 + G * 256 + B) * 0.1)
+        mapbox terrain-rgb encoding:
+        height = -10000 + ((r * 256 * 256 + g * 256 + b) * 0.1)
         
-        Args:
-            image: PIL Image in RGB format
+        args:
+            image: pil image in rgb format
         
-        Returns:
-            2D numpy array of elevation values in meters
+        returns:
+            2d numpy array of elevation values in meters
         """
         img_array = np.array(image)
         r = img_array[:, :, 0].astype(np.float32)
@@ -235,21 +235,21 @@ class MapboxTerrainFetcher:
     
     def _smooth_elevation(self, elevation: np.ndarray) -> np.ndarray:
         """
-        Apply Gaussian smoothing to elevation data to reduce noise and tile seams
+        apply gaussian smoothing to elevation data to reduce noise and tile seams
         
-        This removes:
-        - RGB encoding quantization artifacts
-        - Tile boundary discontinuities
-        - High-frequency noise from compression
+        this removes:
+        - rgb encoding quantization artifacts
+        - tile boundary discontinuities
+        - high-frequency noise from compression
         
-        Args:
-            elevation: 2D numpy array of elevation values
+        args:
+            elevation: 2d numpy array of elevation values
         
-        Returns:
-            Smoothed elevation array
+        returns:
+            smoothed elevation array
         """
-        # Apply Gaussian filter
-        # Sigma controls smoothing strength:
+        # apply gaussian filter
+        # sigma controls smoothing strength:
         #   0.5-1.0 = light smoothing (removes noise, preserves features)
         #   1.0-2.0 = medium smoothing (good for urban/suburban areas)
         #   2.0-5.0 = heavy smoothing (flattens terrain significantly)

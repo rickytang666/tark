@@ -1,6 +1,6 @@
 """
-Mesh utility functions
-Helper functions for mesh operations and export
+mesh utility functions
+helper functions for mesh operations and export
 """
 import trimesh
 from typing import List
@@ -9,13 +9,13 @@ import os
 
 def merge_meshes(meshes: List[trimesh.Trimesh]) -> trimesh.Trimesh:
     """
-    Merge multiple meshes into a single mesh
+    merge multiple meshes into a single mesh
     
-    Args:
-        meshes: List of trimesh.Trimesh objects
+    args:
+        meshes: list of trimesh.trimesh objects
     
-    Returns:
-        Single merged trimesh.Trimesh
+    returns:
+        single merged trimesh.trimesh
     """
     if not meshes:
         raise ValueError("No meshes to merge")
@@ -32,19 +32,19 @@ def export_obj(
     include_normals: bool = True
 ) -> str:
     """
-    Export mesh to OBJ format with MTL
+    export mesh to obj format with mtl
     
-    Args:
-        mesh: trimesh.Trimesh object
-        output_path: Path for output .obj file (without extension)
-        include_normals: Whether to include vertex normals
+    args:
+        mesh: trimesh.trimesh object
+        output_path: path for output .obj file (without extension)
+        include_normals: whether to include vertex normals
     
-    Returns:
-        Path to the exported .obj file
+    returns:
+        path to the exported .obj file
     """
     obj_path = f"{output_path}.obj"
     
-    # Export with trimesh
+    # export with trimesh
     mesh.export(obj_path, file_type='obj', include_normals=include_normals)
     
     return obj_path
@@ -56,28 +56,28 @@ def optimize_mesh(
     merge_vertices: bool = True
 ) -> trimesh.Trimesh:
     """
-    Optimize mesh for game engine use
+    optimize mesh for game engine use
     
-    Args:
-        mesh: Input mesh
-        target_faces: Target face count (None = no decimation)
-        merge_vertices: Whether to merge duplicate vertices
+    args:
+        mesh: input mesh
+        target_faces: target face count (none = no decimation)
+        merge_vertices: whether to merge duplicate vertices
     
-    Returns:
-        Optimized mesh
+    returns:
+        optimized mesh
     """
-    # Merge duplicate vertices
+    # merge duplicate vertices
     if merge_vertices:
         mesh.merge_vertices()
     
-    # Remove degenerate faces
+    # remove degenerate faces
     mesh.remove_degenerate_faces()
     
-    # Remove duplicate faces
+    # remove duplicate faces
     mesh.remove_duplicate_faces()
     
-    # TODO: Add mesh decimation if target_faces is specified
-    # This requires additional libraries like pymeshlab
+    # todo: add mesh decimation if target_faces is specified
+    # this requires additional libraries like pymeshlab
     
     return mesh
 
