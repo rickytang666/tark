@@ -33,6 +33,7 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["Content-Disposition"],
 )
 
 # ensure temp directory exists
@@ -215,7 +216,7 @@ async def download_mesh(job_id: str):
     return FileResponse(
         path=file_path,
         media_type="application/zip",
-        filename=f"tark_{job_id}.zip"
+        filename="tark.zip"
     )
 
 
@@ -223,6 +224,12 @@ def run_generation_task(job_id: str, bbox: BoundingBox, quality: MeshQuality, ma
     """
     background task for running mesh generation
     """
+    import shutil
+    
+    # create job-specific temp dir to avoid collisions
+    job_dir = os.path.join(TEMP_DIR, job_id)
+    os.makedirs(job_dir, exist_ok=True)
+    
     try:
         # get quality settings
         quality_config = QUALITY_SETTINGS[quality]
@@ -236,7 +243,8 @@ def run_generation_task(job_id: str, bbox: BoundingBox, quality: MeshQuality, ma
             }
         
         # generate mesh with quality settings
-        generator = MeshGenerator(TEMP_DIR, mapbox_token)
+        # pass job_dir instead of shared TEMP_DIR
+        generator = MeshGenerator(job_dir, mapbox_token)
         obj_path, mtl_path, texture_files = generator.generate(
             north=bbox.north,
             south=bbox.south,
@@ -270,7 +278,7 @@ def run_generation_task(job_id: str, bbox: BoundingBox, quality: MeshQuality, ma
         if os.path.exists(material_png) and material_png not in files_to_zip:
             files_to_zip.append(material_png)
         
-        # create zip file named with job_id to prevent collision
+        # create zip file named with job_id in the main TEMP_DIR (not job_dir)
         zip_filename = f"tark_{job_id}.zip"
         zip_path = os.path.join(TEMP_DIR, zip_filename)
         
@@ -278,6 +286,12 @@ def run_generation_task(job_id: str, bbox: BoundingBox, quality: MeshQuality, ma
             for file_path in files_to_zip:
                 # add file with just its basename (no directory structure)
                 zipf.write(file_path, arcname=os.path.basename(file_path))
+        
+        # CLEANUP: remove the job directory containing raw obj/mtl/png files
+        try:
+            shutil.rmtree(job_dir)
+        except Exception as e:
+            print(f"Cleanup warning for job {job_id}: {e}")
         
         # mark as complete
         progress_store[job_id] = {
@@ -295,6 +309,12 @@ def run_generation_task(job_id: str, bbox: BoundingBox, quality: MeshQuality, ma
             "message": f"error: {str(e)}",
             "status": "error"
         }
+        # attempt cleanup on failure too
+        if os.path.exists(job_dir):
+            try:
+                shutil.rmtree(job_dir)
+            except:
+                pass
 
 
 @app.post("/generate")

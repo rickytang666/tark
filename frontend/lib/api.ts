@@ -142,7 +142,7 @@ export async function generateMesh(
       "content-disposition"
     );
     const filenameMatch = contentDisposition?.match(/filename="?(.+)"?/i);
-    const filename = filenameMatch ? filenameMatch[1] : `tark_${job_id}.zip`;
+    const filename = filenameMatch ? filenameMatch[1] : "tark.zip";
 
     // Download file
     const blob = await downloadResponse.blob();
