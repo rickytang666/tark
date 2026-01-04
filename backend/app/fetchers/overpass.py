@@ -3,7 +3,10 @@ overpass api fetcher for openstreetmap data
 fetches building footprints and other features
 """
 import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 from typing import List, Dict, Any, Optional
+import time
 
 
 class OverpassFetcher:
@@ -11,7 +14,7 @@ class OverpassFetcher:
     fetches osm data via overpass api
     """
     
-    def __init__(self, timeout: int = 25):
+    def __init__(self, timeout: int = 45):
         """
         initialize overpass fetcher
         
@@ -20,6 +23,16 @@ class OverpassFetcher:
         """
         self.base_url = "https://overpass-api.de/api/interpreter"
         self.timeout = timeout
+        
+        # configure retry strategy
+        self.session = requests.Session()
+        retries = Retry(
+            total=3,
+            backoff_factor=1,
+            status_forcelist=[500, 502, 503, 504],
+            allowed_methods=["POST"]
+        )
+        self.session.mount("https://", HTTPAdapter(max_retries=retries))
     
     def fetch_buildings(
         self,
@@ -45,15 +58,34 @@ class OverpassFetcher:
         
         # 2. send request
         try:
-            response = requests.post(
+            # add user-agent header (good practice for osm)
+            headers = {
+                "User-Agent": "Tark3DGenerator/0.1.0"
+            }
+            
+            response = self.session.post(
                 self.base_url,
                 data={"data": query},
-                timeout=self.timeout + 5
+                headers=headers,
+                timeout=self.timeout + 10  # allow some buffer over the query timeout
             )
             response.raise_for_status()
             data = response.json()
         except requests.exceptions.RequestException as e:
-            raise Exception(f"Overpass API request failed: {e}")
+            # try backup server if main one fails
+            try:
+                print(f"Main Overpass server failed: {e}. Trying backup...")
+                backup_url = "https://lz4.overpass-api.de/api/interpreter"
+                response = self.session.post(
+                    backup_url,
+                    data={"data": query},
+                    headers=headers,
+                    timeout=self.timeout + 10
+                )
+                response.raise_for_status()
+                data = response.json()
+            except requests.exceptions.RequestException as e2:
+                raise Exception(f"Overpass API request failed (main and backup): {e2}")
         
         # 3. parse response
         buildings = self._parse_response(data)

@@ -2,7 +2,7 @@
 tark backend - fastapi application
 generates game-ready 3d meshes from real-world locations
 """
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
@@ -12,6 +12,7 @@ import os
 import math
 import zipfile
 import uuid
+import traceback
 from pathlib import Path
 from dotenv import load_dotenv
 from app.generator import MeshGenerator
@@ -180,7 +181,7 @@ async def get_progress(job_id: str):
         job_id: job identifier
     
     returns:
-        progress information (percent, message, status)
+        progress information (percent, message, status, download_url)
     """
     if job_id not in progress_store:
         raise HTTPException(status_code=404, detail="job not found")
@@ -188,41 +189,43 @@ async def get_progress(job_id: str):
     return progress_store[job_id]
 
 
-@app.post("/generate")
-async def generate_mesh(request: GenerateRequest):
+@app.get("/download/{job_id}")
+async def download_mesh(job_id: str):
     """
-    generate 3d mesh for the specified bounding box
+    download result for a completed job
     
     args:
-        request: contains bounding box and quality settings
+        job_id: job identifier
     
     returns:
-        zip file containing .obj, .mtl, and texture .png files
+        zip file if job is complete
+    """
+    if job_id not in progress_store:
+        raise HTTPException(status_code=404, detail="job not found")
+    
+    job = progress_store[job_id]
+    
+    if job["status"] != "complete":
+        raise HTTPException(status_code=400, detail="job not complete")
+    
+    file_path = job.get("file_path")
+    if not file_path or not os.path.exists(file_path):
+        raise HTTPException(status_code=500, detail="result file not found")
+    
+    return FileResponse(
+        path=file_path,
+        media_type="application/zip",
+        filename=f"tark_{job_id}.zip"
+    )
+
+
+def run_generation_task(job_id: str, bbox: BoundingBox, quality: MeshQuality, mapbox_token: str):
+    """
+    background task for running mesh generation
     """
     try:
-        # validate bounding box
-        request.bbox.validate_bbox()
-        
         # get quality settings
-        quality_config = QUALITY_SETTINGS[request.quality]
-        
-        # get mapbox token
-        mapbox_token = os.getenv("MAPBOX_ACCESS_TOKEN")
-        if not mapbox_token:
-            raise HTTPException(
-                status_code=500,
-                detail="MAPBOX_ACCESS_TOKEN not configured"
-            )
-        
-        # create or use provided job id
-        job_id = request.job_id or str(uuid.uuid4())
-        
-        # initialize progress
-        progress_store[job_id] = {
-            "percent": 0,
-            "message": "starting...",
-            "status": "processing"
-        }
+        quality_config = QUALITY_SETTINGS[quality]
         
         # progress callback
         def update_progress(percent: int, message: str):
@@ -233,13 +236,12 @@ async def generate_mesh(request: GenerateRequest):
             }
         
         # generate mesh with quality settings
-        # see docs/logic/mesh_pipeline.md for full pipeline details
         generator = MeshGenerator(TEMP_DIR, mapbox_token)
         obj_path, mtl_path, texture_files = generator.generate(
-            north=request.bbox.north,
-            south=request.bbox.south,
-            east=request.bbox.east,
-            west=request.bbox.west,
+            north=bbox.north,
+            south=bbox.south,
+            east=bbox.east,
+            west=bbox.west,
             include_buildings=True,
             include_textures=True,
             zoom_level=quality_config["zoom"],
@@ -249,7 +251,7 @@ async def generate_mesh(request: GenerateRequest):
         
         # verify obj file exists
         if not os.path.exists(obj_path):
-            raise HTTPException(status_code=500, detail="generated file not found")
+            raise Exception("generated file not found")
         
         # collect all files to include in zip
         files_to_zip = [obj_path]
@@ -268,8 +270,10 @@ async def generate_mesh(request: GenerateRequest):
         if os.path.exists(material_png) and material_png not in files_to_zip:
             files_to_zip.append(material_png)
         
-        # create zip file
-        zip_path = os.path.join(TEMP_DIR, "geomesh.zip")
+        # create zip file named with job_id to prevent collision
+        zip_filename = f"tark_{job_id}.zip"
+        zip_path = os.path.join(TEMP_DIR, zip_filename)
+        
         with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
             for file_path in files_to_zip:
                 # add file with just its basename (no directory structure)
@@ -279,31 +283,75 @@ async def generate_mesh(request: GenerateRequest):
         progress_store[job_id] = {
             "percent": 100,
             "message": "complete!",
-            "status": "complete"
+            "status": "complete",
+            "file_path": zip_path
         }
         
-        # return zip file
-        return FileResponse(
-            path=zip_path,
-            media_type="application/zip",
-            filename="tark.zip"
+    except Exception as e:
+        print(f"Job {job_id} failed: {str(e)}")
+        traceback.print_exc()
+        progress_store[job_id] = {
+            "percent": 0,
+            "message": f"error: {str(e)}",
+            "status": "error"
+        }
+
+
+@app.post("/generate")
+async def generate_mesh(
+    request: GenerateRequest,
+    background_tasks: BackgroundTasks
+):
+    """
+    start background job to generate 3d mesh
+    
+    args:
+        request: contains bounding box and quality settings
+        background_tasks: fastapi background task handler
+    
+    returns:
+        json object with job_id
+    """
+    try:
+        # validate bounding box immediately
+        request.bbox.validate_bbox()
+        
+        # get mapbox token
+        mapbox_token = os.getenv("MAPBOX_ACCESS_TOKEN")
+        if not mapbox_token:
+            raise HTTPException(
+                status_code=500,
+                detail="MAPBOX_ACCESS_TOKEN not configured"
+            )
+        
+        # create or use provided job id
+        job_id = request.job_id or str(uuid.uuid4())
+        
+        # initialize progress
+        progress_store[job_id] = {
+            "percent": 0,
+            "message": "queued",
+            "status": "queued"
+        }
+        
+        # schedule background task
+        background_tasks.add_task(
+            run_generation_task,
+            job_id,
+            request.bbox,
+            request.quality,
+            mapbox_token
         )
         
+        return {
+            "job_id": job_id,
+            "message": "job started",
+            "status": "queued"
+        }
+        
     except ValueError as e:
-        if request.job_id:
-            progress_store[request.job_id] = {
-                "percent": 0,
-                "message": str(e),
-                "status": "error"
-            }
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
-        if request.job_id:
-            progress_store[request.job_id] = {
-                "percent": 0,
-                "message": f"error: {str(e)}",
-                "status": "error"
-            }
         raise HTTPException(status_code=500, detail=f"internal error: {str(e)}")
 
 
