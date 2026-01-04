@@ -36,8 +36,10 @@ app.add_middleware(
     expose_headers=["Content-Disposition"],
 )
 
-# ensure temp directory exists
-TEMP_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "temp")
+import tempfile
+
+# use system temp directory to avoid cluttering the project workspace
+TEMP_DIR = os.path.join(tempfile.gettempdir(), "tark_gen")
 os.makedirs(TEMP_DIR, exist_ok=True)
 
 # in-memory progress store (use redis in production)
@@ -191,12 +193,13 @@ async def get_progress(job_id: str):
 
 
 @app.get("/download/{job_id}")
-async def download_mesh(job_id: str):
+async def download_mesh(job_id: str, background_tasks: BackgroundTasks):
     """
     download result for a completed job
     
     args:
         job_id: job identifier
+        background_tasks: fastapi background task handler
     
     returns:
         zip file if job is complete
@@ -212,6 +215,9 @@ async def download_mesh(job_id: str):
     file_path = job.get("file_path")
     if not file_path or not os.path.exists(file_path):
         raise HTTPException(status_code=500, detail="result file not found")
+    
+    # schedule file deletion after response is sent
+    background_tasks.add_task(os.remove, file_path)
     
     return FileResponse(
         path=file_path,

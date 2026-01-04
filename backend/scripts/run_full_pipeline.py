@@ -39,7 +39,11 @@ def test_full_pipeline():
     
     try:
         # Initialize generator
-        temp_dir = Path(__file__).parent.parent / "temp"
+        import tempfile
+        # use system temp dir
+        system_temp = tempfile.gettempdir()
+        temp_dir = Path(system_temp) / "tark_gen_full"
+        temp_dir.mkdir(exist_ok=True)
         generator = MeshGenerator(str(temp_dir), access_token)
         
         # Generate complete scene

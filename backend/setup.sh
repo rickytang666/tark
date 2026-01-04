@@ -37,8 +37,6 @@ if [ ! -f ".env" ]; then
     echo -e "   ${BLUE}https://account.mapbox.com/access-tokens/${NC}"
 fi
 
-mkdir -p temp
-
 echo -e "\n${GREEN}✅ Done!${NC}\n"
 echo -e "Next: ${BLUE}source venv/bin/activate${NC}"
 echo -e "Test: ${BLUE}python tests/test_mapbox.py${NC}"

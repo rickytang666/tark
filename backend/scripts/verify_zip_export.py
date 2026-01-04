@@ -38,7 +38,10 @@ def test_zip_export():
     print(f"   East: {east}, West: {west}\n")
     
     try:
-        temp_dir = Path(__file__).parent.parent / "temp"
+        import tempfile
+        # use system temp dir to avoid cluttering workspace
+        system_temp = tempfile.gettempdir()
+        temp_dir = Path(system_temp) / "tark_gen_test"
         temp_dir.mkdir(exist_ok=True)
         
         # Generate mesh
