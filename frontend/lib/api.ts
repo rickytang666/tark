@@ -141,8 +141,10 @@ export async function generateMesh(
     const contentDisposition = downloadResponse.headers.get(
       "content-disposition"
     );
-    const filenameMatch = contentDisposition?.match(/filename="?(.+)"?/i);
-    const filename = filenameMatch ? filenameMatch[1] : "tark.zip";
+    // Regex matches: filename="tark.zip" -> captures tark.zip
+    // Non-greedy capture inside quotes, or non-quoted string
+    const filenameMatch = contentDisposition?.match(/filename=(?:"([^"]+)"|([^;]+))/i);
+    const filename = filenameMatch ? (filenameMatch[1] || filenameMatch[2]) : "tark.zip";
 
     // Download file
     const blob = await downloadResponse.blob();
