@@ -120,6 +120,24 @@ class MeshGenerator:
                     # Apply to generic visual for now (will be baked into material on export)
                     # Terrain UVs are 0-1, image is WxH
                     img = Image.open(saved_path)
+                    
+                    # MODIFY IMAGE: Add Grey Swatch for Walls
+                    # We map walls to UV (0,0) which is Bottom-Left in standard UV space.
+                    # Pillow Image (0,0) is Top-Left. (0, H) is Bottom-Left.
+                    # So we paint a rectangle at (0, Height-32) to (32, Height).
+                    from PIL import ImageDraw
+                    draw = ImageDraw.Draw(img)
+                    swatch_size = 32
+                    w, h = img.size
+                    # Concrete Grey (128, 128, 128)
+                    draw.rectangle(
+                        [0, h - swatch_size, swatch_size, h],
+                        fill=(140, 140, 140) 
+                    )
+                    # Save modified image (overwrite or new?)
+                    # Overwrite is fine as we only use it for this model
+                    img.save(saved_path)
+                    
                     terrain_mesh.visual = trimesh.visual.TextureVisuals(
                         uv=terrain_mesh.visual.uv,
                         image=img
@@ -158,55 +176,64 @@ class MeshGenerator:
                 meshes_to_merge.extend(building_meshes)
         
         # ---------------------------------------------------------
-        # 4. MERGE
+        # 4. PREPARE SCENE
         # ---------------------------------------------------------
-        print("[4/5] 🔧 Merging Scene...")
-        if progress_callback: progress_callback(80, "merging...")
+        print("[4/5] 🎨 Preparing Scene (Terrain + Buildings)...")
+        if progress_callback: progress_callback(80, "preparing scene...")
         
-        final_mesh = merge_meshes(meshes_to_merge)
+        scene = trimesh.Scene()
         
+        # Add Terrain (Verified Texture is Set)
+        # Note: Terrain UVs map to the satellite image
+        scene.add_geometry(terrain_mesh, node_name="Terrain", geom_name="Terrain")
+        
+        if include_buildings and buildings_data:
+            # Consolidate buildings into one mesh for easier handling
+            # Assign Concrete Grey Material
+            if meshes_to_merge and len(meshes_to_merge) > 1:
+                # meshes_to_merge[0] is terrain, rest are buildings
+                # We already added terrain, so just take the rest
+                # Wait, earlier loop logic: meshes_to_merge = [terrain_mesh]
+                # Then extended with buildings.
+                # So buildings are meshes_to_merge[1:]
+                
+                building_list = meshes_to_merge[1:]
+                if building_list:
+                    print(f"      🏗️  Merging {len(building_list)} buildings into single geometry...")
+                    combined_buildings = trimesh.util.concatenate(building_list)
+                    
+                    if terrain_texture_path and include_textures:
+                         # Assign the SHARED Texture (with Grey Swatch)
+                         combined_buildings.visual = trimesh.visual.TextureVisuals(
+                            uv=combined_buildings.visual.uv, # Preserves the UVs we calculated in buildings.py
+                            image=Image.open(terrain_texture_path)
+                         )
+                    else:
+                        # Fallback to Grey Color if no texture
+                        combined_buildings.visual.material = trimesh.visual.material.SimpleMaterial(
+                            diffuse=(128, 128, 128, 255)
+                        )
+                    
+                    scene.add_geometry(combined_buildings, node_name="Buildings", geom_name="Buildings")
+
         # ---------------------------------------------------------
         # 5. EXPORT
         # ---------------------------------------------------------
-        print("[5/5] 💾 Exporting...")
+        print("[5/5] 💾 Exporting Scene...")
         if progress_callback: progress_callback(90, "exporting...")
         
-        # Re-apply texture if it was lost during merge
-        # merge_meshes usually strips complicated texture visuals unless handled carefully
-        # Simple fix: if terrain was textured, we need to map the combined UVs
-        if terrain_texture_path and include_textures:
-            # We assume terrain is the first mesh in merge list.
-            # Terrain vertices are first N vertices of final_mesh
-            n_terrain = len(terrain_mesh.vertices)
-            total_verts = len(final_mesh.vertices)
-            
-            # Create a big UV buffer
-            final_uvs = np.zeros((total_verts, 2))
-            
-            # Copy terrain UVs
-            if hasattr(terrain_mesh.visual, 'uv') and terrain_mesh.visual.uv is not None:
-                final_uvs[:n_terrain] = terrain_mesh.visual.uv
-            
-            # Buildings have their own UVs?
-            # BuildingExtruder generates UVs.
-            # Trimesh merge concatenates UVs if all source meshes have UVs.
-            # app.utils.mesh.merge_meshes needs to handle this.
-            # If standard trimesh.util.concatenate was used, UVs are preserved.
-            
-            # Let's check if final_mesh has UVs
-            if hasattr(final_mesh.visual, 'uv') and final_mesh.visual.uv is not None:
-                 print("      ℹ️  UVs preserved during merge.")
-            else:
-                 # If merge dropped UVs, we at least restore terrain UVs
-                 final_mesh.visual = trimesh.visual.TextureVisuals(uv=final_uvs)
-            
-            # Load image again for the final mesh material
-            final_mesh.visual.material = trimesh.visual.material.SimpleMaterial(
-                image=Image.open(terrain_texture_path)
-            )
-
-        output_path = os.path.join(self.temp_dir, "scene")
-        obj_path = export_obj(final_mesh, output_path, include_normals=True)
+        # Texture Handling
+        # If terrain has a texture image, ensure it survives export.
+        # Trimesh Scene export handles this better than explicit merge.
+        
+        output_path = os.path.join(self.temp_dir, "scene.obj")
+        
+        # Export
+        # Trimesh export_scene_obj returns bytes or string depending on params?
+        # The export() method on scene dispatches based on file extension.
+        scene.export(output_path, file_type='obj', include_normals=True)
+        
+        obj_path = output_path
         
         mtl_path = obj_path.replace(".obj", ".mtl")
         if not os.path.exists(mtl_path): mtl_path = None

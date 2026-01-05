@@ -296,29 +296,55 @@ class BuildingExtruder:
         is_roof = dot_up > 0.7
         is_wall = ~is_roof
         
-        # Roofs: use x, z
-        uvs[is_roof, 0] = vertices[is_roof, 0] * scale
-        uvs[is_roof, 1] = vertices[is_roof, 2] * scale
+        # Roofs: Project from World XZ to 0-1 UV space (matching the terrain map)
+        if self.grid_params:
+            # Normalize X and Z based on Grid Bounds
+            # U = (x - origin_x) / (total_width)
+            # V = (z - origin_z) / (total_height)
+            # Note: total_width = dx * rows? No.
+            # V0 [0, 0] is top-left (Origin).
+            # Grid extends Positive X, Negative Z (North->South).
+            # Wait, bounds are simpler:
+            # min_x, max_x, min_z, max_z.
+            
+            p = self.grid_params
+            # We probed corners in init:
+            # v0 = Top-Left. v_col_end = Top-Right.
+            # v_row_end = Bottom-Left.
+            # width = v_col_end[0] - v0[0]
+            # height = v_row_end[2] - v0[2] (Negative if Z decreases?)
+            
+            # Let's re-calculate precise bounds from the stored vertices to be safe
+            terrain_verts = p['vertices']
+            min_x, min_y, min_z = np.min(terrain_verts, axis=0)
+            max_x, max_y, max_z = np.max(terrain_verts, axis=0)
+            
+            width = max_x - min_x
+            depth = max_z - min_z
+            
+            # Normalize Roof Coordinates
+            # Note: Mapbox image (V=0 is bottom, V=1 is top)
+            # Terrain: Z+ is North (Top of standard map, or V=1?)
+            # Standard Map: North=Top.
+            # Terrain X/Z: X=East, Z=North.
+            # So U = (x - min_x) / width  (West -> East : 0 -> 1)
+            # V = (z - min_z) / depth     (South -> North : 0 -> 1)
+            
+            roof_u = (vertices[is_roof, 0] - min_x) / width
+            roof_v = (vertices[is_roof, 2] - min_z) / depth
+            
+            uvs[is_roof, 0] = roof_u
+            uvs[is_roof, 1] = roof_v
         
-        # Walls: use planar mapping based on dominant normal
-        walls_v = vertices[is_wall]
-        walls_n = v_normals[is_wall]
-        
-        dot_x = np.abs(walls_n[:, 0])
-        dot_z = np.abs(walls_n[:, 2])
-        is_x_facing = dot_x > dot_z
-        
-        # X-Facing walls: use Z, Y
-        mask_x = np.where(is_x_facing)[0]
-        # uv x = z pos, uv y = y pos (height)
-        uvs[np.where(is_wall)[0][mask_x], 0] = walls_v[mask_x, 2] * scale
-        uvs[np.where(is_wall)[0][mask_x], 1] = walls_v[mask_x, 1] * scale
-        
-        # Z-Facing walls: use X, Y
-        mask_z = np.where(~is_x_facing)[0]
-        # uv x = x pos, uv y = y pos (height)
-        uvs[np.where(is_wall)[0][mask_z], 0] = walls_v[mask_z, 0] * scale
-        uvs[np.where(is_wall)[0][mask_z], 1] = walls_v[mask_z, 1] * scale
+        else:
+            # Fallback if no terrain bounds (shouldn't happen in this pipeline)
+            uvs[is_roof, 0] = vertices[is_roof, 0] * 0.001
+            uvs[is_roof, 1] = vertices[is_roof, 2] * 0.001
+            
+        # Walls: Map to (0,0) -> The "Grey Swatch" corner
+        # We'll paint a small grey square at 0,0 of the texture
+        uvs[is_wall, 0] = 0.005 # Small offset to hit the pixel center
+        uvs[is_wall, 1] = 0.005
         
         mesh.visual = trimesh.visual.TextureVisuals(uv=uvs)
 
