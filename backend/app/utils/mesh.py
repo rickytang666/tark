@@ -44,8 +44,24 @@ def export_obj(
     """
     obj_path = f"{output_path}.obj"
     
+    print(f"      📝 Exporting to: {obj_path}")
+    
     # export with trimesh
-    mesh.export(obj_path, file_type='obj', include_normals=include_normals)
+    # if a filename is provided, trimesh writes to disk and returns the exported bytes or None
+    result = mesh.export(obj_path, file_type='obj', include_normals=include_normals)
+    
+    # Check if MTL was expected
+    if hasattr(mesh.visual, 'material'):
+        print(f"      🎨 Mesh has material: {type(mesh.visual.material)}")
+        
+        # Determine expected MTL filename
+        # Trimesh typically names it based on the obj filename or 'material.mtl'
+        # We can check the directory
+        base_dir = os.path.dirname(obj_path)
+        mtl_candidates = [f for f in os.listdir(base_dir) if f.endswith('.mtl')]
+        print(f"      📂 MTL files in output dir: {mtl_candidates}")
+    else:
+        print("      ⚠️  Mesh has NO material attached!")
     
     return obj_path
 

@@ -1,32 +1,32 @@
 """
 coordinate transformation utilities
-converts between wgs84 and local tangent plane coordinates
+converts between wgs84 and local unity coordinates
 
 coordinate system standard (unity/blender convention):
-- x axis: east-west (positive = west, negative = east)
+- x axis: east-west (positive = east)
 - y axis: elevation/up-down (positive = up)
-- z axis: north-south (positive = south, negative = north)
+- z axis: north-south (positive = north)
 
-note: x and z are negated from utm to match unity/blender bird's eye view orientation.
-this y-up, left-handed system is standard for unity and blender.
+this is a left-handed coordinate system standard for unity.
+origin (0,0,0) is defined as the center lat/lon of the requested area.
 """
 import pyproj
-from typing import Tuple
+from typing import Tuple, Union
 import numpy as np
-
 
 class CoordinateTransformer:
     """
     handles coordinate transformations for mesh generation
+    target: unity coordinate system (x=east, y=up, z=north)
     """
     
     def __init__(self, center_lat: float, center_lon: float):
         """
-        initialize transformer with center point
+        initialize transformer with center point (origin)
         
         args:
-            center_lat: center latitude of the area
-            center_lon: center longitude of the area
+            center_lat: center latitude of the area (becomes 0,0,0)
+            center_lon: center longitude of the area (becomes 0,0,0)
         """
         self.center_lat = center_lat
         self.center_lon = center_lon
@@ -34,8 +34,7 @@ class CoordinateTransformer:
         # wgs84 (gps coordinates)
         self.wgs84 = pyproj.CRS("EPSG:4326")
         
-        # local tangent plane (meters from center)
-        # using utm or custom local projection
+        # local tangent plane (meters) using auto-detected UTM zone
         self.local_proj = self._create_local_projection()
         
         self.transformer = pyproj.Transformer.from_crs(
@@ -44,15 +43,13 @@ class CoordinateTransformer:
             always_xy=True
         )
         
-        # calculate center point in projected coordinates
-        self.center_x, self.center_y = self.transformer.transform(center_lon, center_lat)
+        # calculate center point in projected coordinates (internal use only)
+        self.origin_x, self.origin_y = self.transformer.transform(center_lon, center_lat)
     
     def _create_local_projection(self) -> pyproj.CRS:
         """
         create a local projection centered on the area
-        
-        returns:
-            pyproj.crs for local coordinate system
+        uses standard UTM zones
         """
         # use utm zone for the center point
         utm_zone = int((self.center_lon + 180) / 6) + 1
@@ -68,21 +65,24 @@ class CoordinateTransformer:
     
     def latlon_to_local(self, lat: float, lon: float) -> Tuple[float, float]:
         """
-        convert lat/lon to local coordinates (meters from center)
+        convert lat/lon to local unity coordinates (meters from center)
         
         args:
             lat: latitude
             lon: longitude
         
         returns:
-            (x, z) in meters from center
-            x = east-west position
-            z = north-south position
-            (note: y-axis is reserved for elevation in 3d meshes)
+            (x, z) in meters
+            x = east (positive)
+            z = north (positive)
         """
-        x, y = self.transformer.transform(lon, lat)
-        # subtract center to get relative coordinates
-        return x - self.center_x, y - self.center_y
+        # pyproj transforms (lon, lat) -> (easting, northing)
+        easting, northing = self.transformer.transform(lon, lat)
+        
+        x = -(easting - self.origin_x)
+        z = northing - self.origin_y
+        
+        return x, z
     
     def latlon_array_to_local(
         self,
@@ -90,19 +90,11 @@ class CoordinateTransformer:
         lons: np.ndarray
     ) -> Tuple[np.ndarray, np.ndarray]:
         """
-        convert arrays of lat/lon to local coordinates (meters from center)
-        
-        args:
-            lats: array of latitudes
-            lons: array of longitudes
-        
-        returns:
-            (x_array, z_array) in meters from center
-            x = east-west positions
-            z = north-south positions
-            (note: y-axis is reserved for elevation in 3d meshes)
+        vectorized conversion for arrays
         """
-        xs, ys = self.transformer.transform(lons, lats)
-        # subtract center to get relative coordinates
-        return xs - self.center_x, ys - self.center_y
-
+        eastings, northings = self.transformer.transform(lons, lats)
+        
+        xs = -(eastings - self.origin_x)
+        zs = northings - self.origin_y
+        
+        return xs, zs
