@@ -25,6 +25,56 @@ class BuildingExtruder:
         """
         self.transformer = CoordinateTransformer(center_lat, center_lon)
         self.terrain_mesh = terrain_mesh
+        
+        self.grid_params = None
+        self._init_grid_acceleration()
+    
+    def _init_grid_acceleration(self):
+        """
+        initialize acceleration structure for O(1) terrain lookup
+        assumes terrain mesh is a structured grid (row-major)
+        """
+        if self.terrain_mesh is None:
+            return
+            
+        # check if mesh has grid metadata (added in terrain.py)
+        grid_dims = self.terrain_mesh.metadata.get('grid_dims')
+        if not grid_dims:
+            return
+            
+        rows, cols = grid_dims
+        vertices = self.terrain_mesh.vertices
+        
+        if len(vertices) != rows * cols:
+            print("Warning: Terrain vertex count doesn't match grid dimensions. Disabling acceleration.")
+            return
+            
+        # probe corners to determine grid layout
+        v0 = vertices[0]
+        v_col_end = vertices[cols - 1]
+        v_row_end = vertices[(rows - 1) * cols]
+        
+        # calculate steps
+        total_dx = v_col_end[0] - v0[0]
+        total_dz = v_row_end[2] - v0[2]
+        
+        dx_per_col = total_dx / (cols - 1)
+        dz_per_row = total_dz / (rows - 1)
+        
+        # safety check for degenerate grid
+        if abs(dx_per_col) < 1e-6 or abs(dz_per_row) < 1e-6:
+            return
+            
+        self.grid_params = {
+            'origin_x': v0[0],
+            'origin_z': v0[2],
+            'dx_per_col': dx_per_col,
+            'dz_per_row': dz_per_row,
+            'rows': rows,
+            'cols': cols,
+            'vertices': vertices
+        }
+        print(f"✅ Grid acceleration initialized: {rows} x {cols} grid")
     
     def extrude_buildings(
         self,
@@ -271,100 +321,99 @@ class BuildingExtruder:
     
     def _sample_terrain_elevation(self, footprint_2d: np.ndarray) -> Optional[float]:
         """
-        sample the terrain elevation at a building's footprint using ray casting
-        see docs/logic/building_algo.md for detailed explanation
+        sample the terrain elevation at a building's footprint
         """
         if self.terrain_mesh is None:
             return 0.0
-        
+            
         # use centroid for sampling
         centroid_x = np.mean(footprint_2d[:, 0])
         centroid_z = np.mean(footprint_2d[:, 1])
         
+        # Restore original Z-negation logic
+        # The terrain mesh and building footprints apparently have opposing Z coordinates
+        # due to the legacy pipeline logic. 
+        target_z = -centroid_z
+        
+        # Try O(1) Fast Lookup first
+        if self.grid_params:
+            elevation = self._sample_grid_elevation(centroid_x, target_z)
+            if elevation is not None:
+                return elevation
+        
+        # Fallback to Ray Casting
+        # Pass the ALREADY negated z (target_z) to avoid double negation confusion
+        return self._sample_fallback_elevation(centroid_x, target_z)
+
+    def _sample_grid_elevation(self, x: float, z: float) -> Optional[float]:
+        """O(1) elevation lookup using grid coordinates"""
+        p = self.grid_params
+        
+        # calculate grid indices (float)
+        col_f = (x - p['origin_x']) / p['dx_per_col']
+        row_f = (z - p['origin_z']) / p['dz_per_row']
+        
+        # check bounds (with small epsilon buffer)
+        if col_f < -0.01 or col_f > p['cols'] - 0.99 or \
+           row_f < -0.01 or row_f > p['rows'] - 0.99:
+            return None
+            
+        # integer indices (top-left of the cell)
+        # clamp to valid range
+        c0 = int(max(0, min(col_f, p['cols'] - 2)))
+        r0 = int(max(0, min(row_f, p['rows'] - 2)))
+        
+        # bilinear interpolation weights
+        u = col_f - c0
+        v = row_f - r0
+        
+        # clamp weights
+        u = max(0.0, min(1.0, u))
+        v = max(0.0, min(1.0, v))
+        
+        # get 4 corner heights
+        cols = p['cols']
+        idx_00 = r0 * cols + c0
+        idx_10 = idx_00 + 1
+        idx_01 = (r0 + 1) * cols + c0
+        idx_11 = idx_01 + 1
+        
+        h00 = p['vertices'][idx_00, 1]
+        h10 = p['vertices'][idx_10, 1]
+        h01 = p['vertices'][idx_01, 1]
+        h11 = p['vertices'][idx_11, 1]
+        
+        # interpolate
+        h_top = h00 * (1 - u) + h10 * u
+        h_bot = h01 * (1 - u) + h11 * u
+        height = h_top * (1 - v) + h_bot * v
+        
+        return float(height)
+
+    def _sample_fallback_elevation(self, centroid_x: float, search_z: float) -> Optional[float]:
+        """Original O(N) logic for fallback area matching"""
         # get terrain vertices
         terrain_vertices = self.terrain_mesh.vertices
-        terrain_xz = terrain_vertices[:, [0, 2]]  # x-z positions
+        terrain_xz = terrain_vertices[:, [0, 2]]
         
-        # critical fix: negate z when searching terrain!
-        # terrain was centered which flips the z coordinate system
-        # buildings need to search with negated z to match
-        search_z = -centroid_z
-        
-        # fast search: find nearest vertices using squared distances
         dx = terrain_xz[:, 0] - centroid_x
         dz = terrain_xz[:, 1] - search_z
         squared_distances = dx * dx + dz * dz
         
-        # get 16 nearest vertices to have more triangles to check
+        # get 16 nearest
         nearest_16_indices = np.argsort(squared_distances)[:16]
         nearest_16_vertices = terrain_vertices[nearest_16_indices]
-        nearest_16_xz = terrain_xz[nearest_16_indices]
         
-        # find the triangle containing the point using barycentric coordinates
-        point = np.array([centroid_x, search_z])
+        # simple IDW of 4 nearest for robustness
+        nearest_4 = nearest_16_vertices[:4]
+        dists = np.sqrt(squared_distances[nearest_16_indices[:4]])
         
-        # check all possible triangles from the 16 nearest vertices
-        for i in range(16):
-            for j in range(i + 1, 16):
-                for k in range(j + 1, 16):
-                    v0 = nearest_16_vertices[i]
-                    v1 = nearest_16_vertices[j]
-                    v2 = nearest_16_vertices[k]
-                    
-                    # project to x-z plane
-                    a = np.array([v0[0], v0[2]])
-                    b = np.array([v1[0], v1[2]])
-                    c = np.array([v2[0], v2[2]])
-                    
-                    # barycentric coordinates
-                    v0_v1 = b - a
-                    v0_v2 = c - a
-                    v0_p = point - a
-                    
-                    dot00 = np.dot(v0_v2, v0_v2)
-                    dot01 = np.dot(v0_v2, v0_v1)
-                    dot02 = np.dot(v0_v2, v0_p)
-                    dot11 = np.dot(v0_v1, v0_v1)
-                    dot12 = np.dot(v0_v1, v0_p)
-                    
-                    denom = dot00 * dot11 - dot01 * dot01
-                    if abs(denom) < 1e-10:
-                        continue
-                    
-                    inv_denom = 1.0 / denom
-                    u = (dot11 * dot02 - dot01 * dot12) * inv_denom
-                    v = (dot00 * dot12 - dot01 * dot02) * inv_denom
-                    w = 1 - u - v
-                    
-                    if u >= 0 and v >= 0 and w >= 0:
-                        # point is inside triangle - interpolate elevation
-                        elevation = w * v0[1] + u * v1[1] + v * v2[1]
-                        return float(elevation)
-        
-        # fallback: inverse distance weighted average of 4 nearest vertices
-        nearest_4_indices = nearest_16_indices[:4]
-        nearest_4_vertices = nearest_16_vertices[:4]
-        distances = np.sqrt(squared_distances[nearest_4_indices])
-        
-        # check if nearest vertices are reasonable
-        max_distance = distances.max()
-        min_distance = distances[0]  # closest vertex
-        
-        # if the closest vertex is very far (>50m), the building is likely outside terrain bounds
-        if min_distance > 50:
-            print(f"⚠️  Warning: Building outside terrain bounds ({min_distance:.1f}m away). Dropping.")
+        if dists[0] > 50:
             return None
-        
-        # check elevation variance
-        elevation_variance = np.std(nearest_4_vertices[:, 1])
-        if elevation_variance > 15:
-            # use only the closest vertex instead of averaging
-            return float(nearest_4_vertices[0, 1])
-        
-        # use inverse distance weighting
-        weights = 1.0 / (distances + 1e-6)
+            
+        weights = 1.0 / (dists + 1e-6)
         weights /= weights.sum()
-        elevation = np.sum(weights * nearest_4_vertices[:, 1])
+        elevation = np.sum(weights * nearest_4[:, 1])
         
         return float(elevation)
     

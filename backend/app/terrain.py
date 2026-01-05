@@ -70,6 +70,9 @@ class TerrainGenerator:
         # 7. create mesh
         mesh = trimesh.Trimesh(vertices=vertices, faces=faces)
         
+        # Store grid dimensions for O(1) elevation lookup
+        mesh.metadata['grid_dims'] = (rows, cols)
+        
         # 8. attach uv coordinates to mesh
         if uvs is not None:
             mesh.visual = trimesh.visual.TextureVisuals(uv=uvs)
