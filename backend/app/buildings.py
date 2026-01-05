@@ -221,77 +221,52 @@ class BuildingExtruder:
     def _apply_uv_mapping(self, mesh: trimesh.Trimesh, scale: float = 0.2):
         """
         apply box-projected uv mapping to the mesh
-        
-        args:
-            mesh: trimesh object (z-up)
-            scale: texture tiling scale (0.2 = repeats every 5m)
+        see building_algo.md for full algo details
         """
-        # 1. explode mesh so every face has unique vertices
-        # this is necessary because a corner vertex needs different UVs for each face it touches
+        # explode mesh for flat shading (unique vertices per face)
         new_vertices = mesh.vertices[mesh.faces].reshape(-1, 3)
         new_faces = np.arange(len(new_vertices)).reshape(-1, 3)
         
-        # recreate mesh with unmerged vertices
         mesh.vertices = new_vertices
         mesh.faces = new_faces
         
-        # recalculate normals for the new flat faces
+        # fix normals for flat faces
         mesh.fix_normals()
-        normals = mesh.face_normals  # (N, 3)
-        vertices = mesh.vertices     # (N*3, 3)
+        normals = mesh.face_normals
+        vertices = mesh.vertices
         
         # initialize uv array
         uvs = np.zeros((len(vertices), 2))
         
-        # 2. assign uvs based on face orientation (box mapping)
-        # since vertices are now 1:1 with face corners (flat shaded structure),
-        # we can iterate faces and assign uvs to their 3 vertices
-        
-        # we process in groups of 3 (each face has 3 vertices)
-        # face_normals corresponds to faces 0..N
-        # vertices 0,1,2 belong to face 0, etc.
-        
-        num_faces = len(mesh.faces)
-        
-        # vectorized approach?
-        # repeat normals 3 times to match vertices
+        # expand normals to match vertex count
         vertex_normals = np.repeat(normals, 3, axis=0)
         
-        # dot product with Z-axis (0,0,1)
-        # since this is before rotation, Z is Up/Down (Roofs)
+        # determine orientation (z is up before rotation)
         dot_z = np.abs(vertex_normals[:, 2])
-        
-        # mask for roofs/floors (dot_z > 0.7)
         is_roof = dot_z > 0.7
         is_wall = ~is_roof
         
         # --- ROOFS (Planar XY) ---
-        # uv = (x, y)
         uvs[is_roof, 0] = vertices[is_roof, 0] * scale
         uvs[is_roof, 1] = vertices[is_roof, 1] * scale
         
         # --- WALLS (Box Mapping) ---
-        # for walls, find if they face X or Y more
         dot_x = np.abs(vertex_normals[is_wall, 0])
         dot_y = np.abs(vertex_normals[is_wall, 1])
-        
-        # separate X-facing and Y-facing walls
         is_x_facing = dot_x > dot_y
         
-        # indices into the full array
         wall_indices = np.where(is_wall)[0]
         x_wall_indices = wall_indices[is_x_facing]
         y_wall_indices = wall_indices[~is_x_facing]
         
-        # X-facing walls: project YZ (u=y, v=z)
+        # X-facing: YZ plane
         uvs[x_wall_indices, 0] = vertices[x_wall_indices, 1] * scale
         uvs[x_wall_indices, 1] = vertices[x_wall_indices, 2] * scale
         
-        # Y-facing walls: project XZ (u=x, v=z)
+        # Y-facing: XZ plane
         uvs[y_wall_indices, 0] = vertices[y_wall_indices, 0] * scale
         uvs[y_wall_indices, 1] = vertices[y_wall_indices, 2] * scale
         
-        # assign to mesh visual
         mesh.visual = trimesh.visual.TextureVisuals(uv=uvs)
     
     def _sample_terrain_elevation(self, footprint_2d: np.ndarray) -> Optional[float]:

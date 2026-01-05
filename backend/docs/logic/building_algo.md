@@ -31,3 +31,8 @@ buildings must sit _on_ the terrain, not inside it or floating above it at y=0.
 1.  **extrude**: we use `trimesh.creation.extrude_polygon` to create a prism of height `h`.
 2.  **rotate**: the default extrusion is along z; we rotate 90 degrees so it's along y (up).
 3.  **offset**: we add `base_elevation` to all y-coordinates to place the building on the terrain surface.
+4.  **UV Mapping (Box Projection)**:
+    - We "explode" the mesh so each face has unique vertices (flat shading).
+    - **Roofs**: Mapped Planar XY (Top-down) using world coordinates.
+    - **Walls**: Mapped using Box Mapping (Triplanar) logic to tile textures based on wall dimensions.
+    - Scale: 0.2 UV units per meter (repeats every 5m) to create a "concrete/stucco" detail look from satellite noise.
