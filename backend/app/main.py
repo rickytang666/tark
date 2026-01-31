@@ -278,11 +278,17 @@ def run_generation_task(job_id: str, bbox: BoundingBox, quality: MeshQuality, ma
             if os.path.exists(texture_path):
                 files_to_zip.append(texture_path)
         
-        # check for material_0.png (created by trimesh)
+        # CHECK FOR ALL MTL AND PNG FILES IN DIRECTORY
+        # Trimesh auto-generates materials with various names
         obj_dir = os.path.dirname(obj_path)
-        material_png = os.path.join(obj_dir, "material_0.png")
-        if os.path.exists(material_png) and material_png not in files_to_zip:
-            files_to_zip.append(material_png)
+        for f in os.listdir(obj_dir):
+            full_path = os.path.join(obj_dir, f)
+            if full_path in files_to_zip:
+                continue
+                
+            # If it's an MTL file, or a Material PNG (usually material_0.png)
+            if f.endswith('.mtl') or (f.endswith('.png') and 'material' in f):
+                files_to_zip.append(full_path)
         
         # create zip file named with job_id in the main TEMP_DIR (not job_dir)
         zip_filename = f"tark_{job_id}.zip"

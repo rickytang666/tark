@@ -1,0 +1,109 @@
+================================================================================
+COORDINATE TRACE DIAGNOSTIC
+================================================================================
+
+TEST AREA:
+  center: 43.4723, -80.5449
+  bbox: N=43.474800, S=43.469800, E=-80.542400, W=-80.547400
+
+--------------------------------------------------------------------------------
+STEP 1: MAPBOX ELEVATION FETCH
+--------------------------------------------------------------------------------
+elevation array shape: 256 rows x 256 cols
+
+ELEVATION DATA LAYOUT:
+  [0, 0] (top-left):     362.43m
+  [0, 255] (top-right):    330.74m
+  [255, 0] (bottom-left):  400.07m
+  [255, 255] (bottom-right): 340.11m
+  [128, 128] (center):      349.60m
+
+QUESTION: What lat/lon does [0, 0] correspond to?
+  Mapbox tiles are typically ordered:
+    - Rows: North -> South (top to bottom)
+    - Cols: West -> East (left to right)
+  So [0, 0] should be the NORTHWEST corner
+  Expected: lat=43.474800, lon=-80.547400
+
+--------------------------------------------------------------------------------
+STEP 2: TERRAIN MESH GENERATION
+--------------------------------------------------------------------------------
+terrain mesh vertices: 65536
+terrain mesh faces: 130050
+
+TERRAIN MESH VERTEX LAYOUT:
+  vertex 0: x=200.69, y=362.43, z=-278.75
+  vertex 255: x=-203.73, y=330.74, z=-276.54
+  vertex 65280: x=203.71, y=400.07, z=276.54
+  vertex 65535: x=-200.68, y=340.11, z=278.75
+
+TERRAIN.PY LOGIC CHECK:
+  Line 49: lats = np.linspace(south, north, rows)
+           -> lats[0] = 43.469800 (SOUTH)
+           -> lats[-1] = 43.474800 (NORTH)
+  Line 50: lons = np.linspace(west, east, cols)
+           -> lons[0] = -80.547400 (WEST)
+           -> lons[-1] = -80.542400 (EAST)
+
+  Line 51: lon_grid, lat_grid = np.meshgrid(lons, lats)
+           meshgrid creates:
+           - lat_grid[0, 0] = lats[0] = SOUTH
+           - lon_grid[0, 0] = lons[0] = WEST
+           So grid[0, 0] = (lat=43.469800, lon=-80.547400) = SOUTHWEST corner
+
+  BUT elevation_data[0, 0] from Mapbox is NORTHWEST corner!
+  ⚠️  POTENTIAL MISMATCH: elevation array vs lat/lon grid ordering
+
+COORDINATE TRANSFORM VERIFICATION:
+  center (43.472300, -80.544900) -> x=-0.00, z=0.00
+  expected: x=0.00, z=0.00
+
+  north (43.474800, -80.544900) -> x=1.52, z=277.64
+  expected: x≈0, z>0 (north is positive Z)
+
+  east (43.472300, -80.542400) -> x=-202.20, z=1.11
+  expected: x>0 (but coords.py negates it!), z≈0
+
+  vertex 0 should be at (43.469800, -80.547400)
+  transformed: x=200.69, z=-278.75
+  actual mesh: x=200.69, z=-278.75
+  match: True
+
+--------------------------------------------------------------------------------
+STEP 3: BUILDING FETCH AND PLACEMENT
+--------------------------------------------------------------------------------
+fetching buildings from OSM...
+found 28 buildings
+
+BUILDING 0 (id=43250596):
+  centroid: lat=43.472231, lon=-80.546191
+  type: university
+  height: None
+
+  transformed: x=104.38, z=-8.27
+
+✅ Grid acceleration initialized: 256 x 256 grid
+TERRAIN SAMPLING:
+  querying terrain at x=104.38, z=-8.27
+  returned elevation: 351.95085168334003
+
+  ✅ Elevation sampled successfully: 351.95m
+
+  RAW ELEVATION DATA:
+    elevation_data[124, 60] = 351.14m
+    interpolated from terrain: 351.95m
+    difference: 0.81m
+
+================================================================================
+SUMMARY
+================================================================================
+
+Key questions to answer:
+1. Does elevation_data[0, 0] correspond to NW or SW corner?
+2. Does terrain.py's linspace ordering match Mapbox's data ordering?
+3. Does the coordinate transform correctly map lat/lon to x/z?
+4. Does the building grid lookup use the correct x/z to row/col mapping?
+
+Save this output to backend/docs/coordinate_trace_output.txt
+Then analyze the mismatches to find the root cause.
+

@@ -1,44 +1,40 @@
-# terrain smoothing
+# terrain generation
 
-## the problem
+## smoothing
 
-mapbox terrain-rgb tiles contain noise from:
-- rgb encoding quantization
-- png compression artifacts
-- tile stitching seams
-
-measured: ~1m bumps between adjacent vertices on flat areas.
-
-## solution
-
-apply gaussian smoothing filter to elevation data after decoding.
+mapbox terrain-rgb has noise from compression/quantization. apply gaussian smoothing:
 
 ```python
-from scipy.ndimage import gaussian_filter
-smoothed = gaussian_filter(elevation, sigma=1.5)
+smoothed = gaussian_filter(elevation, sigma=2.5)
 ```
 
-## sigma values
+**sigma values:**
+- `1.0`: light (noisy in urban areas)
+- `2.5`: medium (recommended default)
+- `5.0`: heavy (very smooth, loses detail)
 
-- **0**: no smoothing (noisy)
-- **1.0**: light smoothing
-- **1.5**: medium smoothing (default, recommended)
-- **3.0**: heavy smoothing (too much)
+measured: urban areas have 3-6m artifacts between adjacent pixels without smoothing.
 
-## what it does
+## mesh generation
 
-**removes:**
-- quantization artifacts
-- tile boundary seams
-- compression noise
-- small spikes/dips (<1m)
+1. flip elevation data (`np.flipud`) to match coordinate system
+2. create lat/lon grid with `np.linspace(south, north, rows)`
+3. transform to local x/z coordinates via UTM
+4. create vertices: `(x, elevation, z)`
+5. triangulate grid into faces
+6. generate UVs for texture mapping
 
-**preserves:**
-- overall terrain shape
-- major elevation changes
-- building placement accuracy
+## grid metadata
 
-## performance
+terrain mesh stores:
+- `grid_dims`: (rows, cols) for building placement
+- `bounds`: original lat/lon bbox
+- `elevation`: flipped elevation array
 
-+50-100ms for typical 512×512 grid. negligible impact.
+buildings use this for O(1) elevation lookup.
 
+## known issues
+
+- mapbox data has bumps under buildings (not real terrain)
+- increase smoothing (sigma=5) for flatter urban areas
+- unavoidable with free data sources

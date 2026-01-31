@@ -1,45 +1,50 @@
 # coordinate system
 
-## basics
+## setup
 
-- **y-up** coordinate system (unity/blender standard)
-- **1 unit = 1 meter** in obj export
+- **y-up** (unity/blender standard)
+- **1 unit = 1 meter**
 - **right-handed** coordinate system
 
-## axis layout
+## axes
 
 ```
-Y (up)
+y (up)
 |
-|     Z (south)
-|    /
+|    z (north)
 |   /
 |  /
 | /
-+---------- X (west)
++------ x (east)
 ```
 
-- **x axis**: east-west (negative = east, positive = west)
-- **y axis**: elevation (positive = up)
-- **z axis**: north-south (negative = north, positive = south)
+- **x**: east (positive = east, negative = west)
+- **y**: elevation (positive = up)
+- **z**: north (positive = north, negative = south)
 
-## transformation pipeline
+## transformation
 
 ```
-WGS84 (lat/lon) → UTM (meters) → local coords → negate X & Z → final mesh
+lat/lon (WGS84) → UTM projection → local meters → mesh coordinates
 ```
 
-### why negate x and z?
+**key steps:**
+1. center bbox at origin (0, 0, 0)
+2. use UTM projection for accurate meter conversion
+3. negate x in `coords.py` to match unity conventions
 
-makes the bird's eye view orientation match expectations:
-- north at top of screen
-- east on right
-- terrain/buildings align correctly
+## mapbox data ordering
 
-## implementation notes
+**critical:** mapbox returns elevation data as:
+- row 0 = north edge
+- row -1 = south edge
 
-- terrain and buildings generated in same coordinate space
-- single centering operation at the end (x-z only, preserve y elevations)
-- face winding reversed to compensate for negated coordinates
-- uv coordinates stay normal (texture handles orientation)
+**but** terrain.py creates vertices as:
+- row 0 = south edge  
+- row -1 = north edge
 
+**solution:** `np.flipud(elevation_data)` in `terrain.py` line 46
+
+## implementation
+
+see `app/utils/coords.py` for `CoordinateTransformer` class

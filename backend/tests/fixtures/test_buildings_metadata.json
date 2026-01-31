@@ -1,0 +1,74 @@
+{
+  "num_buildings": 28,
+  "num_meshes": 24,
+  "bounds": {
+    "x_min": -221.7131598786218,
+    "x_max": 149.10260536638089,
+    "y_min": 323.0183316286963,
+    "y_max": 368.9965479126015,
+    "z_min": -324.8789505502209,
+    "z_max": 233.78951292857528
+  },
+  "buildings": [
+    {
+      "id": 43250596,
+      "type": "university",
+      "centroid_lat": 43.47223066000001,
+      "centroid_lon": -80.54619102
+    },
+    {
+      "id": 43250611,
+      "type": "university",
+      "centroid_lat": 43.47047564102564,
+      "centroid_lon": -80.54612171025641
+    },
+    {
+      "id": 43250617,
+      "type": "university",
+      "centroid_lat": 43.472343465,
+      "centroid_lon": -80.547438175
+    },
+    {
+      "id": 43250620,
+      "type": "university",
+      "centroid_lat": 43.46986453611112,
+      "centroid_lon": -80.54362973055557
+    },
+    {
+      "id": 43250626,
+      "type": "university",
+      "centroid_lat": 43.4696516,
+      "centroid_lon": -80.54225386666667
+    },
+    {
+      "id": 43250627,
+      "type": "university",
+      "centroid_lat": 43.471776037931036,
+      "centroid_lon": -80.5452845321839
+    },
+    {
+      "id": 43250628,
+      "type": "university",
+      "centroid_lat": 43.470727760526316,
+      "centroid_lon": -80.54371050526316
+    },
+    {
+      "id": 43250629,
+      "type": "university",
+      "centroid_lat": 43.47138156363636,
+      "centroid_lon": -80.54286972727273
+    },
+    {
+      "id": 43250630,
+      "type": "university",
+      "centroid_lat": 43.472049462499996,
+      "centroid_lon": -80.543921175
+    },
+    {
+      "id": 43250632,
+      "type": "university",
+      "centroid_lat": 43.47062947567568,
+      "centroid_lon": -80.54291272432434
+    }
+  ]
+}

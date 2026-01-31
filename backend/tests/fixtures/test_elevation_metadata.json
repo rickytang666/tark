@@ -1,0 +1,22 @@
+{
+  "bounds": {
+    "north": 43.4748,
+    "south": 43.4698,
+    "east": -80.5424,
+    "west": -80.5474
+  },
+  "zoom": 12,
+  "shape": [
+    256,
+    256
+  ],
+  "tiles_fetched": 1,
+  "tile_positions": [
+    [
+      1131,
+      1497
+    ]
+  ],
+  "min_elevation": 318.9172668457031,
+  "max_elevation": 405.3913269042969
+}

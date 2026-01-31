@@ -45,7 +45,8 @@ def export_obj(
     obj_path = f"{output_path}.obj"
     
     # export with trimesh
-    mesh.export(obj_path, file_type='obj', include_normals=include_normals)
+    # if a filename is provided, trimesh writes to disk and returns the exported bytes or None
+    result = mesh.export(obj_path, file_type='obj', include_normals=include_normals)
     
     return obj_path
 

@@ -96,7 +96,7 @@ health check endpoint.
 
 - **bbox constraints:** 1-5km per side
 - **coordinate system:** y-up, 1 unit = 1 meter
-- **terrain smoothing:** gaussian filter (σ=1.5) applied to elevation data
+- **terrain smoothing:** gaussian filter (σ=5.0) applied to elevation data
 - **building placement:** elevation-aware using terrain mesh sampling
 - **output format:** wavefront obj + mtl with normals and uv coordinates
 
