@@ -72,45 +72,6 @@ class BuildingExtruder:
             'vertices': vertices
         }
     
-    def get_building_footprints_for_flattening(
-        self,
-        building_data: List[Dict[str, Any]]
-    ) -> List[tuple]:
-        """
-        extract building footprints and base elevations for terrain flattening
-        
-        returns list of (footprint_xz, base_elevation) tuples
-        """
-        footprints = []
-        
-        for building in building_data:
-            coordinates = building.get("coordinates", [])
-            if len(coordinates) < 3:
-                continue
-            
-            # transform to local coordinates
-            lons = [coord[0] for coord in coordinates]
-            lats = [coord[1] for coord in coordinates]
-            
-            xs, zs = self.transformer.latlon_array_to_local(
-                np.array(lats),
-                np.array(lons)
-            )
-            
-            # get base elevation
-            cx, cz = np.mean(xs), np.mean(zs)
-            elevation = self._sample_terrain_elevation(cx, cz)
-            
-            if elevation is None:
-                continue  # building outside terrain
-            
-            # create footprint array
-            footprint_xz = np.column_stack([xs, zs])
-            
-            footprints.append((footprint_xz, elevation))
-        
-        return footprints
-    
     def extrude_buildings(
         self,
         building_data: List[Dict[str, Any]],
