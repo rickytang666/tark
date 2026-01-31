@@ -1,0 +1,16 @@
+{
+  "test_area": {
+    "name": "waterloo_test",
+    "description": "small test area in waterloo, canada for coordinate verification",
+    "center_lat": 43.4723,
+    "center_lon": -80.5449,
+    "bbox": {
+      "north": 43.474800,
+      "south": 43.469800,
+      "east": -80.542400,
+      "west": -80.547400
+    },
+    "zoom": 12,
+    "notes": "~500m x 500m area, relatively flat terrain"
+  }
+}

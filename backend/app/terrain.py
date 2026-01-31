@@ -38,6 +38,12 @@ class TerrainGenerator:
         west, south, east, north = bounds
         rows, cols = elevation_data.shape
         
+        # flip elevation data to match coordinate system
+        # mapbox returns: row 0 = north, row -1 = south
+        # terrain mesh needs: row 0 = south, row -1 = north
+        # so we flip the array vertically
+        elevation_data = np.flipud(elevation_data)
+        
         # 1. create coordinate transformer centered on bbox
         center_lat = (north + south) / 2
         center_lon = (east + west) / 2
