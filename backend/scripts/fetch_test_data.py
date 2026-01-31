@@ -38,7 +38,7 @@ def fetch_test_data():
         print("ERROR: MAPBOX_ACCESS_TOKEN not found in .env")
         return
     
-    fetcher = MapboxTerrainFetcher(mapbox_token, smoothing_sigma=1.0)
+    fetcher = MapboxTerrainFetcher(mapbox_token, smoothing_sigma=2.5)
     elevation_data, metadata = fetcher.fetch_elevation(
         bbox["north"],
         bbox["south"],

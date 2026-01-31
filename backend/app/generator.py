@@ -164,16 +164,19 @@ class MeshGenerator:
                 extruder = BuildingExtruder(center_lat, center_lon, terrain_mesh)
                 building_meshes = extruder.extrude_buildings(buildings_data)
                 
-                print(f"      ✅ Generated {len(building_meshes)} 3D buildings")
+                # filter out None values (failed buildings)
+                valid_building_meshes = [m for m in building_meshes if m is not None]
                 
-                if debug and building_meshes:
-                    print(f"      🐞 DEBUG: Exporting {len(building_meshes)} buildings to debug_buildings_only.obj")
+                print(f"      ✅ Generated {len(valid_building_meshes)} 3D buildings")
+                
+                if debug and valid_building_meshes:
+                    print(f"      🐞 DEBUG: Exporting {len(valid_building_meshes)} buildings to debug_buildings_only.obj")
                     # Temporarily merge just buildings for debug export
                     # We accept the cost of an extra merge for debugging safety
-                    debug_buildings = trimesh.util.concatenate(building_meshes)
+                    debug_buildings = trimesh.util.concatenate(valid_building_meshes)
                     export_obj(debug_buildings, os.path.join(self.temp_dir, "debug_buildings_only"))
 
-                meshes_to_merge.extend(building_meshes)
+                meshes_to_merge.extend(valid_building_meshes)
         
         # ---------------------------------------------------------
         # 4. PREPARE SCENE

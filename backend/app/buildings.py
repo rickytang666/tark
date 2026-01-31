@@ -47,16 +47,14 @@ class BuildingExtruder:
         vertices = self.terrain_mesh.vertices
         
         # probe corners to determine grid parameters for the X/Z plane (y is up)
-        # terrain.py creates vertices row-by-row
-        v0 = vertices[0]                       # Top-Left (North-West approx)
-        v_col_end = vertices[cols - 1]         # Top-Right (North-East approx)
-        v_row_end = vertices[(rows - 1) * cols] # Bottom-Left (South-West approx)
+        # terrain.py creates vertices row-by-row after flipping elevation data
+        v0 = vertices[0]                       # row 0, col 0 = SOUTHWEST corner
+        v_col_end = vertices[cols - 1]         # row 0, col -1 = SOUTHEAST corner
+        v_row_end = vertices[(rows - 1) * cols] # row -1, col 0 = NORTHWEST corner
         
-        # Verify orientation
-        # With new system: X=East, Z=North.
-        # Mapbox fetch usually goes:
-        # Rows: North -> South (Z decreases)
-        # Cols: West -> East (X increases)
+        # coordinate system after terrain.py flip:
+        # - rows: south -> north (z increases)
+        # - cols: west -> east (x decreases due to negation in coords.py)
         
         total_dx = v_col_end[0] - v0[0]      # Should be positive
         total_dz = v_row_end[2] - v0[2]      # Should be negative
@@ -82,6 +80,9 @@ class BuildingExtruder:
     ) -> List[trimesh.Trimesh]:
         """
         extrude building footprints to 3d meshes
+        
+        returns list of meshes with same length as building_data,
+        with None for buildings that failed to extrude
         """
         meshes = []
         stats = {
@@ -94,15 +95,15 @@ class BuildingExtruder:
         for building in building_data:
             try:
                 mesh = self._extrude_single_building(building, min_height)
+                meshes.append(mesh)  # append even if None to preserve indices
                 if mesh is not None:
-                    meshes.append(mesh)
                     stats["success"] += 1
                 else:
                     stats["dropped"] += 1
             except Exception as e:
                 print(f"Error processing building {building.get('id')}: {e}")
+                meshes.append(None)  # append None for failed buildings
                 stats["failed"] += 1
-                continue
         
         return meshes
     
@@ -163,6 +164,8 @@ class BuildingExtruder:
                 # Building is strictly outside our terrain data
                 return None
             base_elevation = elevation
+            # debug: store elevation in mesh metadata for testing
+            # print(f"Building {building.get('id')}: sampled elevation={elevation:.2f}m at x={cx:.2f}, z={cz:.2f}")
 
         # 5. Extrude
         # trimesh.creation.extrude_polygon assumes input is XY plane and extrudes Z.
