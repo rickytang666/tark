@@ -28,14 +28,13 @@ def fetch_test_data():
     test_area = config["test_area"]
     bbox = test_area["bbox"]
     
-    print(f"fetching test data for: {test_area['name']}")
+    print(f"fetching test data: {test_area['name']}")
     print(f"  bbox: N={bbox['north']}, S={bbox['south']}, E={bbox['east']}, W={bbox['west']}")
-    print(f"  zoom: {test_area['zoom']}")
     
     # fetch elevation data
     mapbox_token = os.getenv("MAPBOX_ACCESS_TOKEN")
     if not mapbox_token:
-        print("ERROR: MAPBOX_ACCESS_TOKEN not found in .env")
+        print("\n\033[31merror:\033[0m MAPBOX_ACCESS_TOKEN not found in .env")
         return
     
     fetcher = MapboxTerrainFetcher(mapbox_token, smoothing_sigma=2.5)
@@ -47,8 +46,8 @@ def fetch_test_data():
         zoom=test_area["zoom"]
     )
     
-    print(f"  fetched: {elevation_data.shape[0]} x {elevation_data.shape[1]} pixels")
-    print(f"  elevation range: {metadata['min_elevation']:.2f}m to {metadata['max_elevation']:.2f}m")
+    print(f"  {elevation_data.shape[0]} x {elevation_data.shape[1]} pixels")
+    print(f"  elevation: {metadata['min_elevation']:.2f}m to {metadata['max_elevation']:.2f}m")
     
     # save elevation data
     fixtures_dir = Path(__file__).parent.parent / "tests" / "fixtures"
@@ -62,10 +61,7 @@ def fetch_test_data():
     with open(metadata_path, "w") as f:
         json.dump(metadata, f, indent=2)
     
-    print(f"\nsaved:")
-    print(f"  {output_path}")
-    print(f"  {metadata_path}")
-    print("\nready for testing")
+    print(f"\n\033[32msaved:\033[0m {output_path.name}, {metadata_path.name}")
 
 if __name__ == "__main__":
     fetch_test_data()

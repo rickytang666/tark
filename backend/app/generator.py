@@ -44,7 +44,7 @@ class MeshGenerator:
         
         start_time = time.time()
         print("\n" + "="*60)
-        print("🚀 BACKEND 2.0 MESH PIPELINE")
+        print("mesh generation pipeline")
         print("="*60)
         
         if progress_callback:
@@ -59,7 +59,7 @@ class MeshGenerator:
         # ---------------------------------------------------------
         # 1. GENERATE TERRAIN
         # ---------------------------------------------------------
-        print("[1/5] 🏔️  Fetching elevation & Building Terrain...")
+        print("[1/5] fetching elevation & building terrain...")
         if progress_callback: progress_callback(10, "building terrain...")
         
         mapbox_fetcher = MapboxTerrainFetcher(self.mapbox_token, smoothing_sigma=5)
@@ -76,10 +76,10 @@ class MeshGenerator:
             generate_uvs=include_textures
         )
         
-        print(f"      ✅ Terrain: {len(terrain_mesh.vertices)} verts")
+        print(f"  terrain: {len(terrain_mesh.vertices)} vertices")
         
         if debug:
-            print("      🐞 DEBUG: Exporting terrain_only.obj")
+            print("  [debug] exporting terrain_only.obj")
             export_obj(terrain_mesh, os.path.join(self.temp_dir, "debug_terrain_only"))
         
         # ---------------------------------------------------------
@@ -87,7 +87,7 @@ class MeshGenerator:
         # ---------------------------------------------------------
         terrain_texture_path = None
         if include_textures:
-            print("[2/5] 📸 Fetching satellite imagery...")
+            print("[2/5] fetching satellite imagery...")
             if progress_callback: progress_callback(30, "fetching imagery...")
             
             sat_fetcher = MapboxSatelliteFetcher(self.mapbox_token)
@@ -143,7 +143,7 @@ class MeshGenerator:
                         image=img
                     )
             except Exception as e:
-                print(f"      ⚠️ Failed to fetch texture: {e}")
+                print(f"  \033[33mwarning:\033[0m failed to fetch texture: {e}")
 
         # ---------------------------------------------------------
         # 3. BUILDINGS
@@ -151,13 +151,13 @@ class MeshGenerator:
         meshes_to_merge = [terrain_mesh]
         
         if include_buildings:
-            print("[3/5] 🏢 Fetching & Extruding Buildings...")
+            print("[3/5] fetching & extruding buildings...")
             if progress_callback: progress_callback(50, "processing buildings...")
             
             overpass = OverpassFetcher()
             buildings_data = overpass.fetch_buildings(north, south, east, west)
             
-            print(f"      ✅ Found {len(buildings_data)} footprints")
+            print(f"  found {len(buildings_data)} footprints")
             
             if buildings_data:
                 # Initialize Extruder with SAME center
@@ -167,10 +167,10 @@ class MeshGenerator:
                 # filter out None values (failed buildings)
                 valid_building_meshes = [m for m in building_meshes if m is not None]
                 
-                print(f"      ✅ Generated {len(valid_building_meshes)} 3D buildings")
+                print(f"  generated {len(valid_building_meshes)} buildings")
                 
                 if debug and valid_building_meshes:
-                    print(f"      🐞 DEBUG: Exporting {len(valid_building_meshes)} buildings to debug_buildings_only.obj")
+                    print(f"  [debug] exporting {len(valid_building_meshes)} buildings to debug_buildings_only.obj")
                     # Temporarily merge just buildings for debug export
                     # We accept the cost of an extra merge for debugging safety
                     debug_buildings = trimesh.util.concatenate(valid_building_meshes)
@@ -181,7 +181,7 @@ class MeshGenerator:
         # ---------------------------------------------------------
         # 4. PREPARE SCENE
         # ---------------------------------------------------------
-        print("[4/5] 🎨 Preparing Scene (Terrain + Buildings)...")
+        print("[4/5] preparing scene...")
         if progress_callback: progress_callback(80, "preparing scene...")
         
         scene = trimesh.Scene()
@@ -202,7 +202,7 @@ class MeshGenerator:
                 
                 building_list = meshes_to_merge[1:]
                 if building_list:
-                    print(f"      🏗️  Merging {len(building_list)} buildings into single geometry...")
+                    print(f"  merging {len(building_list)} buildings...")
                     combined_buildings = trimesh.util.concatenate(building_list)
                     
                     if terrain_texture_path and include_textures:
@@ -222,7 +222,7 @@ class MeshGenerator:
         # ---------------------------------------------------------
         # 5. EXPORT
         # ---------------------------------------------------------
-        print("[5/5] 💾 Exporting Scene...")
+        print("[5/5] exporting scene...")
         if progress_callback: progress_callback(90, "exporting...")
         
         # Texture Handling
@@ -241,8 +241,8 @@ class MeshGenerator:
         mtl_path = obj_path.replace(".obj", ".mtl")
         if not os.path.exists(mtl_path): mtl_path = None
         
-        print(f"\n✅ GENERATION COMPLETE")
-        print(f"Files: {os.path.basename(obj_path)}")
+        print(f"\n\033[32mgeneration complete\033[0m")
+        print(f"files: {os.path.basename(obj_path)}")
         
         if progress_callback: progress_callback(100, "Done")
         

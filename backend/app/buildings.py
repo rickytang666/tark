@@ -71,7 +71,6 @@ class BuildingExtruder:
             'cols': cols,
             'vertices': vertices
         }
-        print(f"✅ Grid acceleration initialized: {rows} x {cols} grid")
     
     def get_building_footprints_for_flattening(
         self,

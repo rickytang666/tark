@@ -28,34 +28,24 @@ def generate_full_package():
     bbox = test_area["bbox"]
     
     print("=" * 80)
-    print("GENERATING FULL TEST PACKAGE")
+    print("generating full test package")
     print("=" * 80)
-    print()
-    print(f"area: {test_area['name']}")
+    print(f"\narea: {test_area['name']}")
     print(f"  bbox: N={bbox['north']:.6f}, S={bbox['south']:.6f}")
     print(f"        E={bbox['east']:.6f}, W={bbox['west']:.6f}")
-    print()
-    print("this will generate:")
-    print("  - terrain mesh with satellite texture")
-    print("  - buildings with materials")
-    print("  - complete .zip package")
-    print()
     
     # check for mapbox token
     mapbox_token = os.getenv("MAPBOX_ACCESS_TOKEN")
     if not mapbox_token:
-        print("ERROR: MAPBOX_ACCESS_TOKEN not found in .env")
+        print("\n\033[31merror:\033[0m MAPBOX_ACCESS_TOKEN not found in .env")
         return
     
     # create generator
     temp_dir = Path(__file__).parent.parent / "temp"
     generator = MeshGenerator(str(temp_dir), mapbox_token)
     
-    print("generating...")
-    print()
-    
     # generate (using the actual generate method signature)
-    zip_path = generator.generate(
+    obj_path, mtl_path, texture_files = generator.generate(
         north=bbox["north"],
         south=bbox["south"],
         east=bbox["east"],
@@ -66,23 +56,12 @@ def generate_full_package():
         texture_max_dimension=1024
     )
     
-    print()
+    print("\n" + "=" * 80)
+    print(f"\033[32mpackage saved:\033[0m {obj_path}")
     print("=" * 80)
-    print("✅ GENERATION COMPLETE")
-    print("=" * 80)
-    print()
-    print(f"package saved: {zip_path}")
-    print()
-    print("to test in unity:")
-    print("  1. extract the zip file")
-    print("  2. drag the .obj file into unity assets")
-    print("  3. textures should load automatically")
-    print()
-    print("verify:")
-    print("  - terrain has satellite imagery texture")
-    print("  - buildings are grey/concrete color")
-    print("  - buildings sit on terrain (minor clipping ok)")
-    print("  - north is north, coordinates correct")
+    print("\nto test in unity:")
+    print("  1. drag the .obj file into unity assets")
+    print("  2. verify terrain texture and building placement")
 
 if __name__ == "__main__":
     generate_full_package()

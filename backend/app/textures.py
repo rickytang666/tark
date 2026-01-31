@@ -64,8 +64,6 @@ class MapboxSatelliteFetcher:
             "access_token": self.access_token
         }
         
-        print(f"⏳ Fetching satellite imagery ({width}x{height})...")
-        
         try:
             response = requests.get(url, params=params, timeout=30)
             response.raise_for_status()
@@ -77,10 +75,8 @@ class MapboxSatelliteFetcher:
             if output_path:
                 os.makedirs(os.path.dirname(output_path), exist_ok=True)
                 image.save(output_path, format='PNG')
-                print(f"✅ Satellite image saved: {output_path}")
-                return image, output_path
             
-            return image, None
+            return image, output_path if output_path else None
             
         except requests.exceptions.RequestException as e:
             raise Exception(f"Failed to fetch satellite imagery: {e}")

@@ -90,12 +90,11 @@ def test_building_cardinal_directions():
     westmost = sorted_by_lon[0]
     eastmost = sorted_by_lon[-1]
     
-    print("\nTEST BUILDINGS:")
+    print("\ntest buildings:")
     print(f"  southmost: id={southmost['id']}, lat={southmost['lat']:.6f}")
     print(f"  northmost: id={northmost['id']}, lat={northmost['lat']:.6f}")
     print(f"  westmost:  id={westmost['id']}, lon={westmost['lon']:.6f}")
     print(f"  eastmost:  id={eastmost['id']}, lon={eastmost['lon']:.6f}")
-    print()
     
     # transform to mesh coordinates
     transformer = CoordinateTransformer(center_lat, center_lon)
@@ -105,41 +104,32 @@ def test_building_cardinal_directions():
     west_x, west_z = transformer.latlon_to_local(westmost["lat"], westmost["lon"])
     east_x, east_z = transformer.latlon_to_local(eastmost["lat"], eastmost["lon"])
     
-    print("MESH COORDINATES:")
+    print("\nmesh coordinates:")
     print(f"  southmost: x={south_x:.2f}, z={south_z:.2f}")
     print(f"  northmost: x={north_x:.2f}, z={north_z:.2f}")
     print(f"  westmost:  x={west_x:.2f}, z={west_z:.2f}")
     print(f"  eastmost:  x={east_x:.2f}, z={east_z:.2f}")
-    print()
     
     # TEST 1: north-south axis (z coordinate)
-    print("TEST 1: NORTH-SOUTH AXIS")
-    print(f"  northmost building z ({north_z:.2f}) > southmost building z ({south_z:.2f})?")
+    print("\ntest 1: north-south axis")
     assert north_z > south_z, (
         f"north-south axis inverted: "
         f"northmost building (lat={northmost['lat']:.6f}) has z={north_z:.2f}, "
         f"southmost building (lat={southmost['lat']:.6f}) has z={south_z:.2f}. "
         f"expected north_z > south_z"
     )
-    print(f"  ✓ PASS: north is higher z ({north_z:.2f} > {south_z:.2f})")
-    print()
+    print(f"  \033[32mpass\033[0m: north z ({north_z:.2f}) > south z ({south_z:.2f})")
     
     # TEST 2: east-west axis (x coordinate)
     # note: x is negated in coords.py, so east (higher lon) should have LOWER x
-    print("TEST 2: EAST-WEST AXIS")
-    print(f"  eastmost lon: {eastmost['lon']:.6f}, x={east_x:.2f}")
-    print(f"  westmost lon: {westmost['lon']:.6f}, x={west_x:.2f}")
-    print(f"  eastmost building x ({east_x:.2f}) < westmost building x ({west_x:.2f})?")
-    print(f"  (x is negated, so higher longitude = lower x)")
-    
+    print("\ntest 2: east-west axis")
     assert east_x < west_x, (
         f"east-west axis inverted: "
         f"eastmost building (lon={eastmost['lon']:.6f}) has x={east_x:.2f}, "
         f"westmost building (lon={westmost['lon']:.6f}) has x={west_x:.2f}. "
         f"expected east_x < west_x (due to negation)"
     )
-    print(f"  ✓ PASS: east is lower x ({east_x:.2f} < {west_x:.2f})")
-    print()
+    print(f"  \033[32mpass\033[0m: east x ({east_x:.2f}) < west x ({west_x:.2f})")
 
 
 def test_buildings_sit_on_terrain():
@@ -219,11 +209,10 @@ def test_buildings_sit_on_terrain():
             })
     
     if misplaced:
-        print(f"\nFOUND {len(misplaced)} MISPLACED BUILDINGS:")
+        print(f"\n\033[31merror:\033[0m found {len(misplaced)} misplaced buildings:")
         for b in misplaced[:5]:
             print(f"  id={b['id']}: terrain={b['terrain_elevation']:.2f}m, "
-                  f"base={b['building_base']:.2f}m, height={b['building_height']:.2f}m, diff={b['diff']:.2f}m")
-            print(f"    position: x={b['mesh_pos'][0]:.2f}, z={b['mesh_pos'][1]:.2f}")
+                  f"base={b['building_base']:.2f}m, diff={b['diff']:.2f}m")
         if len(misplaced) > 5:
             print(f"  ... and {len(misplaced) - 5} more")
     
@@ -231,9 +220,9 @@ def test_buildings_sit_on_terrain():
     correct_buildings = total_buildings - len(misplaced)
     accuracy = correct_buildings / total_buildings * 100 if total_buildings > 0 else 0
     
-    print(f"\nBUILDING PLACEMENT ACCURACY:")
-    print(f"  total buildings: {total_buildings}")
-    print(f"  correctly placed: {correct_buildings}")
+    print(f"\nbuilding placement accuracy:")
+    print(f"  total: {total_buildings}")
+    print(f"  correct: {correct_buildings}")
     print(f"  misplaced: {len(misplaced)}")
     print(f"  accuracy: {accuracy:.1f}%")
     
