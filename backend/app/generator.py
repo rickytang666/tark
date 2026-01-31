@@ -62,7 +62,7 @@ class MeshGenerator:
         print("[1/5] 🏔️  Fetching elevation & Building Terrain...")
         if progress_callback: progress_callback(10, "building terrain...")
         
-        mapbox_fetcher = MapboxTerrainFetcher(self.mapbox_token, smoothing_sigma=1.5)
+        mapbox_fetcher = MapboxTerrainFetcher(self.mapbox_token, smoothing_sigma=5)
         elevation_data, _ = mapbox_fetcher.fetch_elevation(
             north=north, south=south, east=east, west=west, zoom=zoom_level
         )

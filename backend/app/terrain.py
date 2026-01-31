@@ -4,6 +4,7 @@ converts elevation raster to 3d mesh
 """
 import numpy as np
 import trimesh
+from typing import List, Tuple
 from app.utils.coords import CoordinateTransformer
 
 
@@ -88,6 +89,69 @@ class TerrainGenerator:
             mesh.visual = trimesh.visual.TextureVisuals(uv=uvs)
         
         return mesh
+    
+    def flatten_building_footprints(
+        self,
+        terrain_mesh: trimesh.Trimesh,
+        building_footprints: List[Tuple[np.ndarray, float]],
+        blend_distance: float = 3.0
+    ) -> trimesh.Trimesh:
+        """
+        flatten terrain under building footprints with smooth blending
+        
+        args:
+            terrain_mesh: terrain mesh to modify
+            building_footprints: list of (footprint_xz, base_elevation) tuples
+                footprint_xz: Nx2 array of [x, z] coordinates forming polygon
+                base_elevation: elevation to flatten to
+            blend_distance: distance (meters) over which to blend flat area into terrain
+        
+        returns:
+            modified terrain mesh with smoothly flattened areas under buildings
+        """
+        from shapely.geometry import Polygon, Point
+        
+        vertices = terrain_mesh.vertices.copy()
+        original_elevations = vertices[:, 1].copy()
+        
+        for footprint_xz, base_elevation in building_footprints:
+            # create polygon from footprint
+            poly = Polygon(footprint_xz)
+            
+            # find vertices to modify
+            for i in range(len(vertices)):
+                point = Point(vertices[i, 0], vertices[i, 2])  # x, z
+                
+                if poly.contains(point):
+                    # inside footprint: flatten completely
+                    vertices[i, 1] = base_elevation
+                else:
+                    # outside: check distance for blending
+                    distance = poly.exterior.distance(point)
+                    
+                    if distance < blend_distance:
+                        # blend zone: interpolate between flat and original
+                        # weight: 1.0 at edge, 0.0 at blend_distance
+                        weight = 1.0 - (distance / blend_distance)
+                        weight = weight ** 2  # smooth falloff (quadratic)
+                        
+                        blended_elevation = (
+                            base_elevation * weight +
+                            original_elevations[i] * (1 - weight)
+                        )
+                        vertices[i, 1] = blended_elevation
+        
+        # create new mesh with modified vertices
+        flattened_mesh = trimesh.Trimesh(
+            vertices=vertices,
+            faces=terrain_mesh.faces,
+            visual=terrain_mesh.visual
+        )
+        
+        # preserve metadata
+        flattened_mesh.metadata = terrain_mesh.metadata.copy()
+        
+        return flattened_mesh
     
     def _generate_faces(self, rows: int, cols: int) -> np.ndarray:
         """

@@ -73,6 +73,45 @@ class BuildingExtruder:
         }
         print(f"✅ Grid acceleration initialized: {rows} x {cols} grid")
     
+    def get_building_footprints_for_flattening(
+        self,
+        building_data: List[Dict[str, Any]]
+    ) -> List[tuple]:
+        """
+        extract building footprints and base elevations for terrain flattening
+        
+        returns list of (footprint_xz, base_elevation) tuples
+        """
+        footprints = []
+        
+        for building in building_data:
+            coordinates = building.get("coordinates", [])
+            if len(coordinates) < 3:
+                continue
+            
+            # transform to local coordinates
+            lons = [coord[0] for coord in coordinates]
+            lats = [coord[1] for coord in coordinates]
+            
+            xs, zs = self.transformer.latlon_array_to_local(
+                np.array(lats),
+                np.array(lons)
+            )
+            
+            # get base elevation
+            cx, cz = np.mean(xs), np.mean(zs)
+            elevation = self._sample_terrain_elevation(cx, cz)
+            
+            if elevation is None:
+                continue  # building outside terrain
+            
+            # create footprint array
+            footprint_xz = np.column_stack([xs, zs])
+            
+            footprints.append((footprint_xz, elevation))
+        
+        return footprints
+    
     def extrude_buildings(
         self,
         building_data: List[Dict[str, Any]],
@@ -299,55 +338,11 @@ class BuildingExtruder:
         is_roof = dot_up > 0.7
         is_wall = ~is_roof
         
-        # Roofs: Project from World XZ to 0-1 UV space (matching the terrain map)
-        if self.grid_params:
-            # Normalize X and Z based on Grid Bounds
-            # U = (x - origin_x) / (total_width)
-            # V = (z - origin_z) / (total_height)
-            # Note: total_width = dx * rows? No.
-            # V0 [0, 0] is top-left (Origin).
-            # Grid extends Positive X, Negative Z (North->South).
-            # Wait, bounds are simpler:
-            # min_x, max_x, min_z, max_z.
-            
-            p = self.grid_params
-            # We probed corners in init:
-            # v0 = Top-Left. v_col_end = Top-Right.
-            # v_row_end = Bottom-Left.
-            # width = v_col_end[0] - v0[0]
-            # height = v_row_end[2] - v0[2] (Negative if Z decreases?)
-            
-            # Let's re-calculate precise bounds from the stored vertices to be safe
-            terrain_verts = p['vertices']
-            min_x, min_y, min_z = np.min(terrain_verts, axis=0)
-            max_x, max_y, max_z = np.max(terrain_verts, axis=0)
-            
-            width = max_x - min_x
-            depth = max_z - min_z
-            
-            # Normalize Roof Coordinates
-            # Note: Mapbox image (V=0 is bottom, V=1 is top)
-            # Terrain: Z+ is North (Top of standard map, or V=1?)
-            # Standard Map: North=Top.
-            # Terrain X/Z: X=East, Z=North.
-            # So U = (x - min_x) / width  (West -> East : 0 -> 1)
-            # V = (z - min_z) / depth     (South -> North : 0 -> 1)
-            
-            roof_u = (vertices[is_roof, 0] - min_x) / width
-            roof_v = (vertices[is_roof, 2] - min_z) / depth
-            
-            uvs[is_roof, 0] = roof_u
-            uvs[is_roof, 1] = roof_v
-        
-        else:
-            # Fallback if no terrain bounds (shouldn't happen in this pipeline)
-            uvs[is_roof, 0] = vertices[is_roof, 0] * 0.001
-            uvs[is_roof, 1] = vertices[is_roof, 2] * 0.001
-            
-        # Walls: Map to (0,0) -> The "Grey Swatch" corner
-        # We'll paint a small grey square at 0,0 of the texture
-        uvs[is_wall, 0] = 0.005 # Small offset to hit the pixel center
-        uvs[is_wall, 1] = 0.005
+        # Roofs AND Walls: Map to (0,0) -> The "Grey Swatch" corner
+        # This makes all buildings solid grey (cleaner bird's eye view)
+        # We paint a small grey square at 0,0 of the texture
+        uvs[:, 0] = 0.005  # Small offset to hit the pixel center
+        uvs[:, 1] = 0.005
         
         mesh.visual = trimesh.visual.TextureVisuals(uv=uvs)
 

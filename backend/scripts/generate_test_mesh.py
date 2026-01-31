@@ -66,8 +66,20 @@ def generate_test_mesh():
     print(f"  found {len(building_data)} buildings")
     print()
     
-    # 3. extrude buildings
-    print("[3/3] extruding buildings...")
+    # 3. flatten terrain under buildings (optional - set to True to enable)
+    flatten_terrain = False
+    
+    if flatten_terrain:
+        print("[3/5] flattening terrain under buildings...")
+        extruder_temp = BuildingExtruder(center_lat, center_lon, terrain_mesh=terrain_mesh)
+        footprints = extruder_temp.get_building_footprints_for_flattening(building_data)
+        print(f"  flattening {len(footprints)} building footprints...")
+        terrain_mesh = terrain_gen.flatten_building_footprints(terrain_mesh, footprints)
+        print(f"  terrain flattened")
+        print()
+    
+    # 4. extrude buildings
+    print(f"[{4 if flatten_terrain else 3}/{5 if flatten_terrain else 3}] extruding buildings...")
     extruder = BuildingExtruder(center_lat, center_lon, terrain_mesh=terrain_mesh)
     building_meshes = extruder.extrude_buildings(building_data, min_height=3.0)
     
@@ -76,28 +88,36 @@ def generate_test_mesh():
     print(f"  extruded {len(valid_building_meshes)} buildings")
     print()
     
-    # 4. combine
-    print("combining meshes...")
+    # 5. combine
+    print(f"[{5 if flatten_terrain else 4}/{5 if flatten_terrain else 3}] combining meshes...")
     all_meshes = [terrain_mesh] + valid_building_meshes
     combined_mesh = trimesh.util.concatenate(all_meshes)
     print(f"  combined: {len(combined_mesh.vertices)} vertices, {len(combined_mesh.faces)} faces")
     print()
     
-    # 5. export
+    # 6. export
     output_dir = Path(__file__).parent.parent / "temp"
     output_dir.mkdir(exist_ok=True)
-    output_path = output_dir / "test_mesh.obj"
+    output_name = "test_mesh_flattened.obj" if flatten_terrain else "test_mesh.obj"
+    output_path = output_dir / output_name
     
     combined_mesh.export(output_path)
     
     print(f"✅ saved: {output_path}")
     print()
+    if flatten_terrain:
+        print("TERRAIN FLATTENING ENABLED")
+        print("  terrain has been flattened under each building footprint")
+        print("  buildings should sit on flat pads (no clipping)")
+        print()
     print("import to unity:")
     print(f"  1. drag {output_path.name} into unity assets")
     print("  2. verify:")
     print("     - terrain is not upside down")
     print("     - buildings are on terrain (not floating/sinking)")
     print("     - north is north (buildings in correct positions)")
+    if flatten_terrain:
+        print("     - buildings sit on flat foundations (no weird bumps underneath)")
     print()
     
     # print bounds for reference
