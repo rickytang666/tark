@@ -25,7 +25,10 @@ wheels/
 
 # Environment
 .env
+# uv / python environment
 .venv
+.python-version
+uv.lock
 
 # Temporary files
 temp/
