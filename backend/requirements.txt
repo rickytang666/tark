@@ -9,3 +9,4 @@ pillow>=10.2.0
 python-multipart>=0.0.9
 scipy>=1.11.0
 mapbox-earcut>=1.0.0
+redis==5.0.1

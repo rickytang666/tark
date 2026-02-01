@@ -16,6 +16,8 @@ import traceback
 from pathlib import Path
 from dotenv import load_dotenv
 from app.generator import MeshGenerator
+import redis
+import json
 
 # load environment variables from .env file
 load_dotenv()
@@ -38,12 +40,27 @@ app.add_middleware(
 
 import tempfile
 
-# use system temp directory to avoid cluttering the project workspace
+# system temp dir prevents workspace clutter
 TEMP_DIR = os.path.join(tempfile.gettempdir(), "tark_gen")
 os.makedirs(TEMP_DIR, exist_ok=True)
 
-# in-memory progress store (use redis in production)
-progress_store: Dict[str, Dict[str, any]] = {}
+# redis setup
+redis_client = redis.Redis.from_url(
+    os.getenv("REDIS_URL", "redis://localhost:6379"),
+    decode_responses=True
+)
+
+def set_job_progress(job_id: str, data: dict):
+    """save job progress to redis (1h expiry)"""
+    # serializing as json preserves types (int vs str)
+    redis_client.setex(f"job:{job_id}", 3600, json.dumps(data))
+
+def get_job_progress(job_id: str) -> Optional[dict]:
+    """get job progress from redis"""
+    data = redis_client.get(f"job:{job_id}")
+    if data:
+        return json.loads(data)
+    return None
 
 
 class MeshQuality(str, Enum):
@@ -186,10 +203,11 @@ async def get_progress(job_id: str):
     returns:
         progress information (percent, message, status, download_url)
     """
-    if job_id not in progress_store:
+    progress = get_job_progress(job_id)
+    if not progress:
         raise HTTPException(status_code=404, detail="job not found")
     
-    return progress_store[job_id]
+    return progress
 
 
 @app.get("/download/{job_id}")
@@ -204,10 +222,11 @@ async def download_mesh(job_id: str, background_tasks: BackgroundTasks):
     returns:
         zip file if job is complete
     """
-    if job_id not in progress_store:
+    progress = get_job_progress(job_id)
+    if not progress:
         raise HTTPException(status_code=404, detail="job not found")
     
-    job = progress_store[job_id]
+    job = progress
     
     if job["status"] != "complete":
         raise HTTPException(status_code=400, detail="job not complete")
@@ -242,14 +261,14 @@ def run_generation_task(job_id: str, bbox: BoundingBox, quality: MeshQuality, ma
         
         # progress callback
         def update_progress(percent: int, message: str):
-            progress_store[job_id] = {
+            set_job_progress(job_id, {
                 "percent": percent,
                 "message": message,
                 "status": "processing"
-            }
+            })
         
-        # generate mesh with quality settings
-        # pass job_dir instead of shared TEMP_DIR
+        # generate mesh
+        # use job_dir to avoid collisions
         generator = MeshGenerator(job_dir, mapbox_token)
         obj_path, mtl_path, texture_files = generator.generate(
             north=bbox.north,
@@ -278,19 +297,19 @@ def run_generation_task(job_id: str, bbox: BoundingBox, quality: MeshQuality, ma
             if os.path.exists(texture_path):
                 files_to_zip.append(texture_path)
         
-        # CHECK FOR ALL MTL AND PNG FILES IN DIRECTORY
-        # Trimesh auto-generates materials with various names
+        # ensure all mtl and png files are included
+        # trimesh may auto-generate materials with unpredictable names
         obj_dir = os.path.dirname(obj_path)
         for f in os.listdir(obj_dir):
             full_path = os.path.join(obj_dir, f)
             if full_path in files_to_zip:
                 continue
                 
-            # If it's an MTL file, or a Material PNG (usually material_0.png)
+            # include mtl files and material pngs
             if f.endswith('.mtl') or (f.endswith('.png') and 'material' in f):
                 files_to_zip.append(full_path)
         
-        # create zip file named with job_id in the main TEMP_DIR (not job_dir)
+        # create zip in main temp dir
         zip_filename = f"tark_{job_id}.zip"
         zip_path = os.path.join(TEMP_DIR, zip_filename)
         
@@ -299,28 +318,29 @@ def run_generation_task(job_id: str, bbox: BoundingBox, quality: MeshQuality, ma
                 # add file with just its basename (no directory structure)
                 zipf.write(file_path, arcname=os.path.basename(file_path))
         
-        # CLEANUP: remove the job directory containing raw obj/mtl/png files
+        # cleanup raw files
         try:
             shutil.rmtree(job_dir)
         except Exception as e:
-            print(f"Cleanup warning for job {job_id}: {e}")
+            print(f"cleanup warning {job_id}: {e}")
         
         # mark as complete
-        progress_store[job_id] = {
+        # mark as complete
+        set_job_progress(job_id, {
             "percent": 100,
             "message": "complete!",
             "status": "complete",
             "file_path": zip_path
-        }
+        })
         
     except Exception as e:
         print(f"Job {job_id} failed: {str(e)}")
         traceback.print_exc()
-        progress_store[job_id] = {
+        set_job_progress(job_id, {
             "percent": 0,
             "message": f"error: {str(e)}",
             "status": "error"
-        }
+        })
         # attempt cleanup on failure too
         if os.path.exists(job_dir):
             try:
@@ -360,11 +380,12 @@ async def generate_mesh(
         job_id = request.job_id or str(uuid.uuid4())
         
         # initialize progress
-        progress_store[job_id] = {
+        # initialize progress
+        set_job_progress(job_id, {
             "percent": 0,
             "message": "queued",
             "status": "queued"
-        }
+        })
         
         # schedule background task
         background_tasks.add_task(
