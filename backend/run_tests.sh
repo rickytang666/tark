@@ -13,22 +13,18 @@ if [ -d "backend" ]; then
     cd backend
 fi
 
-# activate venv
-if [ -f "venv/bin/activate" ]; then
-    echo -e "${BLUE}activating venv...${NC}"
-    source venv/bin/activate
-else
-    echo -e "${BLUE}creating venv...${NC}"
-    python3 -m venv venv
-    source venv/bin/activate
+# check uv
+if ! command -v uv &> /dev/null; then
+    echo -e "${BLUE}installing uv...${NC}"
+    curl -LsSf https://astral.sh/uv/install.sh | sh
 fi
 
-# install dependencies
-echo -e "${BLUE}installing dependencies...${NC}"
-pip install -r requirements.txt -q
+# sync dependencies
+echo -e "${BLUE}syncing dependencies...${NC}"
+uv sync
 
 # run tests
 echo -e "${BLUE}running pytest...${NC}"
-python -m pytest tests/
+uv run pytest tests/
 
 echo -e "\n${GREEN}tests completed!${NC}"
