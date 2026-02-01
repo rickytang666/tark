@@ -36,10 +36,14 @@ app = FastAPI(
 def rate_limit_key(request: Request):
     """
     custom key for rate limiting
-    exempts 'owner' (localhost) from limits ("supreme rights")
+    exempts localhost ('owner')
     """
     if request.client.host in ["127.0.0.1", "localhost", "::1"]:
-        return None  # exempt
+        # allow mocking ip for testing (only from localhost)
+        mock_ip = request.headers.get("x-mock-ip")
+        if mock_ip:
+            return mock_ip
+        return None
     return get_remote_address(request)
 
 limiter = Limiter(key_func=rate_limit_key)
@@ -384,14 +388,16 @@ async def run_generation_task(job_id: str, bbox: BoundingBox, quality: MeshQuali
 @app.post("/generate")
 @limiter.limit("5/minute")
 async def generate_mesh(
-    request: GenerateRequest,
+    request: Request,
+    body: GenerateRequest,
     background_tasks: BackgroundTasks
 ):
     """
     start background job to generate 3d mesh
     
     args:
-        request: contains bounding box and quality settings
+        request: fastapi request object (required for ratelimit)
+        body: contains bounding box and quality settings
         background_tasks: fastapi background task handler
     
     returns:
@@ -399,7 +405,7 @@ async def generate_mesh(
     """
     try:
         # validate bounding box immediately
-        request.bbox.validate_bbox()
+        body.bbox.validate_bbox()
         
         # get mapbox token
         mapbox_token = os.getenv("MAPBOX_ACCESS_TOKEN")
@@ -410,9 +416,8 @@ async def generate_mesh(
             )
         
         # create or use provided job id
-        job_id = request.job_id or str(uuid.uuid4())
+        job_id = body.job_id or str(uuid.uuid4())
         
-        # initialize progress
         # initialize progress
         set_job_progress(job_id, {
             "percent": 0,
@@ -424,8 +429,8 @@ async def generate_mesh(
         background_tasks.add_task(
             run_generation_task,
             job_id,
-            request.bbox,
-            request.quality,
+            body.bbox,
+            body.quality,
             mapbox_token
         )
         
