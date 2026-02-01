@@ -10,6 +10,12 @@ how to verify redis persistence works.
     uv run uvicorn app.main:app
     ```
 
+    start redis:
+
+    ```bash
+    brew services start redis
+    ```
+
 2.  **create job**
 
     ```bash
@@ -38,6 +44,11 @@ how to verify redis persistence works.
     ```
     _response should be `{"status": "complete", ...}` (or whatever state it was in)._
 
-## 2. automated check (todo)
+## 3. cleanup
 
-future: add pytest fixture that spins up redis docker container.
+to stop redis:
+
+```bash
+brew services stop redis
+# or if running foreground: ctrl+c
+```
