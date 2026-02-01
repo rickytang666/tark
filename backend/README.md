@@ -1,6 +1,6 @@
 # tark backend
 
-fastapi backend for generating game-ready 3d meshes from real-world locations.
+fastapi + redis backend for generating game-ready 3d meshes from real-world locations.
 
 ## setup
 

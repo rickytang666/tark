@@ -28,7 +28,7 @@ Takes 30-120 seconds depending on area size.
 ## Stack
 
 - Next.js + Leaflet (frontend map picker)
-- FastAPI + Trimesh (backend mesh generation)
+- FastAPI + Redis + Trimesh (backend generation & job store)
 - Mapbox Terrain-RGB (elevation)
 - OpenStreetMap Overpass (buildings)
 - Mapbox Static (satellite texture)
