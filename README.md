@@ -47,8 +47,7 @@ You need:
 cd backend
 ./setup.sh
 # add MAPBOX_ACCESS_TOKEN to .env
-source venv/bin/activate
-python -m app.main  # runs on :8000
+uv run uvicorn app.main:app --reload  # runs on :8000
 ```
 
 **Frontend:**

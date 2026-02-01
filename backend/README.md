@@ -13,8 +13,7 @@ edit `.env` and add your mapbox token from https://account.mapbox.com/access-tok
 ## run
 
 ```bash
-source venv/bin/activate
-python -m app.main
+uv run uvicorn app.main:app --reload
 ```
 
 server runs at `http://localhost:8000`
@@ -25,13 +24,10 @@ api docs at `http://localhost:8000/docs`
 
 ```bash
 # test terrain fetcher
-python tests/test_mapbox.py
+uv run python tests/test_mapbox.py
 
 # test building fetcher
-python tests/test_overpass.py
-
-# test full pipeline
-python tests/test_pipeline.py
+uv run python tests/test_overpass.py
 ```
 
 ## structure
