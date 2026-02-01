@@ -2,7 +2,7 @@
 tark backend - fastapi application
 generates game-ready 3d meshes from real-world locations
 """
-from fastapi import FastAPI, HTTPException, BackgroundTasks
+from fastapi import FastAPI, HTTPException, BackgroundTasks, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
@@ -19,6 +19,9 @@ from app.generator import MeshGenerator
 import redis
 import json
 import asyncio
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
 
 # load environment variables from .env file
 load_dotenv()
@@ -28,6 +31,20 @@ app = FastAPI(
     description="generate game-ready 3d meshes from real-world locations",
     version="0.1.0"
 )
+
+# setup rate limiter
+def rate_limit_key(request: Request):
+    """
+    custom key for rate limiting
+    exempts 'owner' (localhost) from limits ("supreme rights")
+    """
+    if request.client.host in ["127.0.0.1", "localhost", "::1"]:
+        return None  # exempt
+    return get_remote_address(request)
+
+limiter = Limiter(key_func=rate_limit_key)
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 # cors middleware for frontend integration
 app.add_middleware(
@@ -365,6 +382,7 @@ async def run_generation_task(job_id: str, bbox: BoundingBox, quality: MeshQuali
 
 
 @app.post("/generate")
+@limiter.limit("5/minute")
 async def generate_mesh(
     request: GenerateRequest,
     background_tasks: BackgroundTasks
