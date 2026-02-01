@@ -18,6 +18,7 @@ from dotenv import load_dotenv
 from app.generator import MeshGenerator
 import redis
 import json
+import asyncio
 
 # load environment variables from .env file
 load_dotenv()
@@ -245,9 +246,9 @@ async def download_mesh(job_id: str, background_tasks: BackgroundTasks):
     )
 
 
-def run_generation_task(job_id: str, bbox: BoundingBox, quality: MeshQuality, mapbox_token: str):
+def _run_generation_sync(job_id: str, bbox: BoundingBox, quality: MeshQuality, mapbox_token: str):
     """
-    background task for running mesh generation
+    sync worker for mesh generation (CPU bound)
     """
     import shutil
     
@@ -347,6 +348,20 @@ def run_generation_task(job_id: str, bbox: BoundingBox, quality: MeshQuality, ma
                 shutil.rmtree(job_dir)
             except:
                 pass
+
+
+
+async def run_generation_task(job_id: str, bbox: BoundingBox, quality: MeshQuality, mapbox_token: str):
+    """
+    async wrapper for background generation
+    """
+    await asyncio.to_thread(
+        _run_generation_sync, 
+        job_id, 
+        bbox, 
+        quality, 
+        mapbox_token
+    )
 
 
 @app.post("/generate")
