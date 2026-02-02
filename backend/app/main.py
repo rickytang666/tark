@@ -22,6 +22,9 @@ import asyncio
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
+import logging
+from pythonjsonlogger import jsonlogger
+from prometheus_fastapi_instrumentator import Instrumentator
 
 # load environment variables from .env file
 load_dotenv()
@@ -31,6 +34,19 @@ app = FastAPI(
     description="generate game-ready 3d meshes from real-world locations",
     version="0.1.0"
 )
+
+# setup metrics
+Instrumentator().instrument(app).expose(app)
+
+# setup json logging
+logger = logging.getLogger()
+logHandler = logging.StreamHandler()
+formatter = jsonlogger.JsonFormatter(
+    "%(asctime)s %(levelname)s %(message)s %(module)s"
+)
+logHandler.setFormatter(formatter)
+logger.addHandler(logHandler)
+logger.setLevel(logging.INFO)
 
 # setup rate limiter
 def rate_limit_key(request: Request):
@@ -272,6 +288,10 @@ def _run_generation_sync(job_id: str, bbox: BoundingBox, quality: MeshQuality, m
     sync worker for mesh generation (CPU bound)
     """
     import shutil
+    import time
+    import trimesh
+    
+    start_time = time.time()
     
     # create job-specific temp dir to avoid collisions
     job_dir = os.path.join(TEMP_DIR, job_id)
@@ -286,8 +306,11 @@ def _run_generation_sync(job_id: str, bbox: BoundingBox, quality: MeshQuality, m
             set_job_progress(job_id, {
                 "percent": percent,
                 "message": message,
+                "message": message,
                 "status": "processing"
             })
+            
+        logger.info("job_started", extra={"job_id": job_id, "bbox": bbox.dict()})
         
         # generate mesh
         # use job_dir to avoid collisions
@@ -307,6 +330,18 @@ def _run_generation_sync(job_id: str, bbox: BoundingBox, quality: MeshQuality, m
         # verify obj file exists
         if not os.path.exists(obj_path):
             raise Exception("generated file not found")
+            
+        # calculate stats
+        try:
+            mesh = trimesh.load(obj_path)
+            # trimesh.load might return Scene or Trimesh
+            if isinstance(mesh, trimesh.Scene):
+                vertex_count = sum(len(g.vertices) for g in mesh.geometry.values())
+            else:
+                vertex_count = len(mesh.vertices)
+        except Exception as e:
+            logger.warning("stats_calc_failed", extra={"error": str(e)})
+            vertex_count = 0
         
         # collect all files to include in zip
         files_to_zip = [obj_path]
@@ -344,7 +379,7 @@ def _run_generation_sync(job_id: str, bbox: BoundingBox, quality: MeshQuality, m
         try:
             shutil.rmtree(job_dir)
         except Exception as e:
-            print(f"cleanup warning {job_id}: {e}")
+            logger.warning("cleanup_warning", extra={"job_id": job_id, "error": str(e)})
         
         # mark as complete
         # mark as complete
@@ -355,8 +390,17 @@ def _run_generation_sync(job_id: str, bbox: BoundingBox, quality: MeshQuality, m
             "file_path": zip_path
         })
         
+        elapsed = time.time() - start_time
+        
+        logger.info("job_completed", extra={
+            "job_id": job_id,
+            "zip_path": zip_path,
+            "duration_seconds": round(elapsed, 2),
+            "vertex_count": vertex_count
+        })
+        
     except Exception as e:
-        print(f"Job {job_id} failed: {str(e)}")
+        logger.error("job_failed", extra={"job_id": job_id, "error": str(e)})
         traceback.print_exc()
         set_job_progress(job_id, {
             "percent": 0,
