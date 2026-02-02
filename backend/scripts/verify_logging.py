@@ -52,7 +52,12 @@ def run_server():
     uvicorn.run(fastapi_app, host="127.0.0.1", port=8891, log_level="info")
 
 def verify_logging():
-    print("--- Starting Logging Verification ---")
+    # colors
+    green = "\033[92m"
+    red = "\033[91m"
+    reset = "\033[0m"
+
+    print(f"{green}--- starting logging verification ---{reset}")
     
     t = threading.Thread(target=run_server, daemon=True)
     t.start()
@@ -67,9 +72,9 @@ def verify_logging():
     }
     
     try:
-        print("Triggering generation (look for JSON logs below)...")
+        print("triggering generation (look for json logs below)...")
         resp = requests.post(url, json=payload, headers=headers)
-        print(f"Status: {resp.status_code}")
+        print(f"status: {resp.status_code}")
         
         # Monitor for a bit to let background task finish
         time.sleep(2)

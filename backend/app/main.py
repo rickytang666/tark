@@ -24,6 +24,7 @@ from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 import logging
 from pythonjsonlogger import jsonlogger
+from prometheus_fastapi_instrumentator import Instrumentator
 
 # load environment variables from .env file
 load_dotenv()
@@ -33,6 +34,9 @@ app = FastAPI(
     description="generate game-ready 3d meshes from real-world locations",
     version="0.1.0"
 )
+
+# setup metrics
+Instrumentator().instrument(app).expose(app)
 
 # setup json logging
 logger = logging.getLogger()
