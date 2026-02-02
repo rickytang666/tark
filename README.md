@@ -28,7 +28,7 @@ Takes 30-120 seconds depending on area size.
 ## Stack
 
 - Next.js + Leaflet (frontend map picker)
-- FastAPI + Trimesh (backend mesh generation)
+- FastAPI + Redis + Trimesh (backend generation & job store)
 - Mapbox Terrain-RGB (elevation)
 - OpenStreetMap Overpass (buildings)
 - Mapbox Static (satellite texture)
@@ -39,6 +39,7 @@ You need:
 
 - Python 3.11+
 - Node.js 18+
+- Redis (for job persistence)
 - Mapbox API token (free tier at https://account.mapbox.com/access-tokens/)
 
 **Backend:**
@@ -46,9 +47,9 @@ You need:
 ```bash
 cd backend
 ./setup.sh
+# ensure redis-server is running
 # add MAPBOX_ACCESS_TOKEN to .env
-source venv/bin/activate
-python -m app.main  # runs on :8000
+uv run uvicorn app.main:app --reload  # runs on :8000
 ```
 
 **Frontend:**

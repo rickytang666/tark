@@ -2,7 +2,7 @@
 tark backend - fastapi application
 generates game-ready 3d meshes from real-world locations
 """
-from fastapi import FastAPI, HTTPException, BackgroundTasks
+from fastapi import FastAPI, HTTPException, BackgroundTasks, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
@@ -16,6 +16,15 @@ import traceback
 from pathlib import Path
 from dotenv import load_dotenv
 from app.generator import MeshGenerator
+import redis
+import json
+import asyncio
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
+import logging
+from pythonjsonlogger import jsonlogger
+from prometheus_fastapi_instrumentator import Instrumentator
 
 # load environment variables from .env file
 load_dotenv()
@@ -25,6 +34,37 @@ app = FastAPI(
     description="generate game-ready 3d meshes from real-world locations",
     version="0.1.0"
 )
+
+# setup metrics
+Instrumentator().instrument(app).expose(app)
+
+# setup json logging
+logger = logging.getLogger()
+logHandler = logging.StreamHandler()
+formatter = jsonlogger.JsonFormatter(
+    "%(asctime)s %(levelname)s %(message)s %(module)s"
+)
+logHandler.setFormatter(formatter)
+logger.addHandler(logHandler)
+logger.setLevel(logging.INFO)
+
+# setup rate limiter
+def rate_limit_key(request: Request):
+    """
+    custom key for rate limiting
+    exempts localhost ('owner')
+    """
+    if request.client.host in ["127.0.0.1", "localhost", "::1"]:
+        # allow mocking ip for testing (only from localhost)
+        mock_ip = request.headers.get("x-mock-ip")
+        if mock_ip:
+            return mock_ip
+        return None
+    return get_remote_address(request)
+
+limiter = Limiter(key_func=rate_limit_key)
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 # cors middleware for frontend integration
 app.add_middleware(
@@ -38,12 +78,27 @@ app.add_middleware(
 
 import tempfile
 
-# use system temp directory to avoid cluttering the project workspace
+# system temp dir prevents workspace clutter
 TEMP_DIR = os.path.join(tempfile.gettempdir(), "tark_gen")
 os.makedirs(TEMP_DIR, exist_ok=True)
 
-# in-memory progress store (use redis in production)
-progress_store: Dict[str, Dict[str, any]] = {}
+# redis setup
+redis_client = redis.Redis.from_url(
+    os.getenv("REDIS_URL", "redis://localhost:6379"),
+    decode_responses=True
+)
+
+def set_job_progress(job_id: str, data: dict):
+    """save job progress to redis (1h expiry)"""
+    # serializing as json preserves types (int vs str)
+    redis_client.setex(f"job:{job_id}", 3600, json.dumps(data))
+
+def get_job_progress(job_id: str) -> Optional[dict]:
+    """get job progress from redis"""
+    data = redis_client.get(f"job:{job_id}")
+    if data:
+        return json.loads(data)
+    return None
 
 
 class MeshQuality(str, Enum):
@@ -186,10 +241,11 @@ async def get_progress(job_id: str):
     returns:
         progress information (percent, message, status, download_url)
     """
-    if job_id not in progress_store:
+    progress = get_job_progress(job_id)
+    if not progress:
         raise HTTPException(status_code=404, detail="job not found")
     
-    return progress_store[job_id]
+    return progress
 
 
 @app.get("/download/{job_id}")
@@ -204,10 +260,11 @@ async def download_mesh(job_id: str, background_tasks: BackgroundTasks):
     returns:
         zip file if job is complete
     """
-    if job_id not in progress_store:
+    progress = get_job_progress(job_id)
+    if not progress:
         raise HTTPException(status_code=404, detail="job not found")
     
-    job = progress_store[job_id]
+    job = progress
     
     if job["status"] != "complete":
         raise HTTPException(status_code=400, detail="job not complete")
@@ -226,11 +283,15 @@ async def download_mesh(job_id: str, background_tasks: BackgroundTasks):
     )
 
 
-def run_generation_task(job_id: str, bbox: BoundingBox, quality: MeshQuality, mapbox_token: str):
+def _run_generation_sync(job_id: str, bbox: BoundingBox, quality: MeshQuality, mapbox_token: str):
     """
-    background task for running mesh generation
+    sync worker for mesh generation (CPU bound)
     """
     import shutil
+    import time
+    import trimesh
+    
+    start_time = time.time()
     
     # create job-specific temp dir to avoid collisions
     job_dir = os.path.join(TEMP_DIR, job_id)
@@ -242,14 +303,17 @@ def run_generation_task(job_id: str, bbox: BoundingBox, quality: MeshQuality, ma
         
         # progress callback
         def update_progress(percent: int, message: str):
-            progress_store[job_id] = {
+            set_job_progress(job_id, {
                 "percent": percent,
                 "message": message,
+                "message": message,
                 "status": "processing"
-            }
+            })
+            
+        logger.info("job_started", extra={"job_id": job_id, "bbox": bbox.dict()})
         
-        # generate mesh with quality settings
-        # pass job_dir instead of shared TEMP_DIR
+        # generate mesh
+        # use job_dir to avoid collisions
         generator = MeshGenerator(job_dir, mapbox_token)
         obj_path, mtl_path, texture_files = generator.generate(
             north=bbox.north,
@@ -266,6 +330,18 @@ def run_generation_task(job_id: str, bbox: BoundingBox, quality: MeshQuality, ma
         # verify obj file exists
         if not os.path.exists(obj_path):
             raise Exception("generated file not found")
+            
+        # calculate stats
+        try:
+            mesh = trimesh.load(obj_path)
+            # trimesh.load might return Scene or Trimesh
+            if isinstance(mesh, trimesh.Scene):
+                vertex_count = sum(len(g.vertices) for g in mesh.geometry.values())
+            else:
+                vertex_count = len(mesh.vertices)
+        except Exception as e:
+            logger.warning("stats_calc_failed", extra={"error": str(e)})
+            vertex_count = 0
         
         # collect all files to include in zip
         files_to_zip = [obj_path]
@@ -278,19 +354,19 @@ def run_generation_task(job_id: str, bbox: BoundingBox, quality: MeshQuality, ma
             if os.path.exists(texture_path):
                 files_to_zip.append(texture_path)
         
-        # CHECK FOR ALL MTL AND PNG FILES IN DIRECTORY
-        # Trimesh auto-generates materials with various names
+        # ensure all mtl and png files are included
+        # trimesh may auto-generate materials with unpredictable names
         obj_dir = os.path.dirname(obj_path)
         for f in os.listdir(obj_dir):
             full_path = os.path.join(obj_dir, f)
             if full_path in files_to_zip:
                 continue
                 
-            # If it's an MTL file, or a Material PNG (usually material_0.png)
+            # include mtl files and material pngs
             if f.endswith('.mtl') or (f.endswith('.png') and 'material' in f):
                 files_to_zip.append(full_path)
         
-        # create zip file named with job_id in the main TEMP_DIR (not job_dir)
+        # create zip in main temp dir
         zip_filename = f"tark_{job_id}.zip"
         zip_path = os.path.join(TEMP_DIR, zip_filename)
         
@@ -299,28 +375,38 @@ def run_generation_task(job_id: str, bbox: BoundingBox, quality: MeshQuality, ma
                 # add file with just its basename (no directory structure)
                 zipf.write(file_path, arcname=os.path.basename(file_path))
         
-        # CLEANUP: remove the job directory containing raw obj/mtl/png files
+        # cleanup raw files
         try:
             shutil.rmtree(job_dir)
         except Exception as e:
-            print(f"Cleanup warning for job {job_id}: {e}")
+            logger.warning("cleanup_warning", extra={"job_id": job_id, "error": str(e)})
         
         # mark as complete
-        progress_store[job_id] = {
+        # mark as complete
+        set_job_progress(job_id, {
             "percent": 100,
             "message": "complete!",
             "status": "complete",
             "file_path": zip_path
-        }
+        })
+        
+        elapsed = time.time() - start_time
+        
+        logger.info("job_completed", extra={
+            "job_id": job_id,
+            "zip_path": zip_path,
+            "duration_seconds": round(elapsed, 2),
+            "vertex_count": vertex_count
+        })
         
     except Exception as e:
-        print(f"Job {job_id} failed: {str(e)}")
+        logger.error("job_failed", extra={"job_id": job_id, "error": str(e)})
         traceback.print_exc()
-        progress_store[job_id] = {
+        set_job_progress(job_id, {
             "percent": 0,
             "message": f"error: {str(e)}",
             "status": "error"
-        }
+        })
         # attempt cleanup on failure too
         if os.path.exists(job_dir):
             try:
@@ -329,16 +415,33 @@ def run_generation_task(job_id: str, bbox: BoundingBox, quality: MeshQuality, ma
                 pass
 
 
+
+async def run_generation_task(job_id: str, bbox: BoundingBox, quality: MeshQuality, mapbox_token: str):
+    """
+    async wrapper for background generation
+    """
+    await asyncio.to_thread(
+        _run_generation_sync, 
+        job_id, 
+        bbox, 
+        quality, 
+        mapbox_token
+    )
+
+
 @app.post("/generate")
+@limiter.limit("5/minute")
 async def generate_mesh(
-    request: GenerateRequest,
+    request: Request,
+    body: GenerateRequest,
     background_tasks: BackgroundTasks
 ):
     """
     start background job to generate 3d mesh
     
     args:
-        request: contains bounding box and quality settings
+        request: fastapi request object (required for ratelimit)
+        body: contains bounding box and quality settings
         background_tasks: fastapi background task handler
     
     returns:
@@ -346,7 +449,7 @@ async def generate_mesh(
     """
     try:
         # validate bounding box immediately
-        request.bbox.validate_bbox()
+        body.bbox.validate_bbox()
         
         # get mapbox token
         mapbox_token = os.getenv("MAPBOX_ACCESS_TOKEN")
@@ -357,21 +460,21 @@ async def generate_mesh(
             )
         
         # create or use provided job id
-        job_id = request.job_id or str(uuid.uuid4())
+        job_id = body.job_id or str(uuid.uuid4())
         
         # initialize progress
-        progress_store[job_id] = {
+        set_job_progress(job_id, {
             "percent": 0,
             "message": "queued",
             "status": "queued"
-        }
+        })
         
         # schedule background task
         background_tasks.add_task(
             run_generation_task,
             job_id,
-            request.bbox,
-            request.quality,
+            body.bbox,
+            body.quality,
             mapbox_token
         )
         

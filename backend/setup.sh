@@ -17,18 +17,16 @@ if ! command -v python3 &> /dev/null; then
 fi
 echo -e "${GREEN}✓${NC} Python $(python3 --version | cut -d' ' -f2)"
 
-# Create venv
-if [ ! -d "venv" ]; then
-    echo -e "${BLUE}→${NC} Creating venv..."
-    python3 -m venv venv
+# Check uv
+if ! command -v uv &> /dev/null; then
+    echo -e "${RED}❌ uv required: https://github.com/astral-sh/uv${NC}"
+    exit 1
 fi
-
-source venv/bin/activate
+echo -e "${GREEN}✓${NC} uv $(uv --version)"
 
 # Install deps
 echo -e "${BLUE}→${NC} Installing dependencies..."
-pip install --upgrade pip -q
-pip install -r requirements.txt -q
+uv sync
 
 # Setup .env
 if [ ! -f ".env" ]; then
@@ -38,7 +36,6 @@ if [ ! -f ".env" ]; then
 fi
 
 echo -e "\n${GREEN}✅ Done!${NC}\n"
-echo -e "Next: ${BLUE}source venv/bin/activate${NC}"
-echo -e "Test: ${BLUE}python tests/test_mapbox.py${NC}"
-echo -e "Run:  ${BLUE}python -m app.main${NC}"
+echo -e "Test: ${BLUE}uv run python tests/test_mapbox.py${NC}"
+echo -e "Run:  ${BLUE}uv run uvicorn app.main:app${NC}"
 
