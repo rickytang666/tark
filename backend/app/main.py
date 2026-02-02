@@ -284,6 +284,10 @@ def _run_generation_sync(job_id: str, bbox: BoundingBox, quality: MeshQuality, m
     sync worker for mesh generation (CPU bound)
     """
     import shutil
+    import time
+    import trimesh
+    
+    start_time = time.time()
     
     # create job-specific temp dir to avoid collisions
     job_dir = os.path.join(TEMP_DIR, job_id)
@@ -322,6 +326,18 @@ def _run_generation_sync(job_id: str, bbox: BoundingBox, quality: MeshQuality, m
         # verify obj file exists
         if not os.path.exists(obj_path):
             raise Exception("generated file not found")
+            
+        # calculate stats
+        try:
+            mesh = trimesh.load(obj_path)
+            # trimesh.load might return Scene or Trimesh
+            if isinstance(mesh, trimesh.Scene):
+                vertex_count = sum(len(g.vertices) for g in mesh.geometry.values())
+            else:
+                vertex_count = len(mesh.vertices)
+        except Exception as e:
+            logger.warning("stats_calc_failed", extra={"error": str(e)})
+            vertex_count = 0
         
         # collect all files to include in zip
         files_to_zip = [obj_path]
@@ -370,9 +386,13 @@ def _run_generation_sync(job_id: str, bbox: BoundingBox, quality: MeshQuality, m
             "file_path": zip_path
         })
         
+        elapsed = time.time() - start_time
+        
         logger.info("job_completed", extra={
             "job_id": job_id,
-            "zip_path": zip_path
+            "zip_path": zip_path,
+            "duration_seconds": round(elapsed, 2),
+            "vertex_count": vertex_count
         })
         
     except Exception as e:
