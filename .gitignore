@@ -38,3 +38,6 @@ plan/*.md
 # OS
 .DS_Store
 Thumbs.db
+
+# misc
+*.txt
