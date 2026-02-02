@@ -22,6 +22,8 @@ import asyncio
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
+import logging
+from pythonjsonlogger import jsonlogger
 
 # load environment variables from .env file
 load_dotenv()
@@ -31,6 +33,16 @@ app = FastAPI(
     description="generate game-ready 3d meshes from real-world locations",
     version="0.1.0"
 )
+
+# setup json logging
+logger = logging.getLogger()
+logHandler = logging.StreamHandler()
+formatter = jsonlogger.JsonFormatter(
+    "%(asctime)s %(levelname)s %(message)s %(module)s"
+)
+logHandler.setFormatter(formatter)
+logger.addHandler(logHandler)
+logger.setLevel(logging.INFO)
 
 # setup rate limiter
 def rate_limit_key(request: Request):
@@ -286,8 +298,11 @@ def _run_generation_sync(job_id: str, bbox: BoundingBox, quality: MeshQuality, m
             set_job_progress(job_id, {
                 "percent": percent,
                 "message": message,
+                "message": message,
                 "status": "processing"
             })
+            
+        logger.info("job_started", extra={"job_id": job_id, "bbox": bbox.dict()})
         
         # generate mesh
         # use job_dir to avoid collisions
@@ -344,7 +359,7 @@ def _run_generation_sync(job_id: str, bbox: BoundingBox, quality: MeshQuality, m
         try:
             shutil.rmtree(job_dir)
         except Exception as e:
-            print(f"cleanup warning {job_id}: {e}")
+            logger.warning("cleanup_warning", extra={"job_id": job_id, "error": str(e)})
         
         # mark as complete
         # mark as complete
@@ -355,8 +370,13 @@ def _run_generation_sync(job_id: str, bbox: BoundingBox, quality: MeshQuality, m
             "file_path": zip_path
         })
         
+        logger.info("job_completed", extra={
+            "job_id": job_id,
+            "zip_path": zip_path
+        })
+        
     except Exception as e:
-        print(f"Job {job_id} failed: {str(e)}")
+        logger.error("job_failed", extra={"job_id": job_id, "error": str(e)})
         traceback.print_exc()
         set_job_progress(job_id, {
             "percent": 0,

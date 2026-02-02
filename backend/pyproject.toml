@@ -11,6 +11,7 @@ dependencies = [
     "pillow>=12.1.0",
     "pyproj>=3.7.2",
     "python-dotenv>=1.2.1",
+    "python-json-logger>=4.0.0",
     "python-multipart>=0.0.22",
     "redis>=7.1.0",
     "requests>=2.32.5",
