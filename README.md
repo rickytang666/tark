@@ -39,6 +39,7 @@ You need:
 
 - Python 3.11+
 - Node.js 18+
+- Redis (for job persistence)
 - Mapbox API token (free tier at https://account.mapbox.com/access-tokens/)
 
 **Backend:**
@@ -46,6 +47,7 @@ You need:
 ```bash
 cd backend
 ./setup.sh
+# ensure redis-server is running
 # add MAPBOX_ACCESS_TOKEN to .env
 uv run uvicorn app.main:app --reload  # runs on :8000
 ```
