@@ -19,25 +19,31 @@ Draw a box on the map, download a .zip with:
 
 1. Go to localhost:3000
 2. Shift+drag to select an area (1-5km works best)
-3. Pick quality level
+3. Pick quality level (**Low** to **Ultra**)
 4. Hit generate
 5. Drag the .obj into Unity/Unreal/Blender
 
 Takes 30-120 seconds depending on area size.
 
+## Features
+
+- **Async Generation**: Heavy mesh processing runs in background threads.
+- **Job Persistence**: Progress stored in Redis (1h expiry).
+- **Rate Limiting**: 5 requests/minute per IP (exempt on localhost).
+- **Monitoring**: Prometheus metrics at `backend:8000/metrics`.
+- **Structured Logging**: JSON logs for easy tracking.
+
 ## Stack
 
-- Next.js + Leaflet (frontend map picker)
-- FastAPI + Redis + Trimesh (backend generation & job store)
-- Mapbox Terrain-RGB (elevation)
-- OpenStreetMap Overpass (buildings)
-- Mapbox Static (satellite texture)
+- **Frontend**: Next.js + Tailwind CSS + Leaflet
+- **Backend**: FastAPI + Redis + Trimesh + Prometheus
+- **Data**: Mapbox Terrain-RGB (elevation), OSM Overpass (buildings), Mapbox Static (satellite)
 
 ## Setup
 
 You need:
 
-- Python 3.11+
+- Python 3.13+
 - Node.js 18+
 - Redis (for job persistence)
 - Mapbox API token (free tier at https://account.mapbox.com/access-tokens/)
@@ -61,6 +67,8 @@ npm run dev  # runs on :3000
 ```
 
 Open localhost:3000, shift+drag on the map, hit generate.
+
+See [backend/README.md](backend/README.md) and [frontend/README.md](frontend/README.md) for detailed sub-system documentation.
 
 ## Unity import
 
